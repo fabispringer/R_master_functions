@@ -50,7 +50,7 @@ f_run_linear_models_parallel <- function(
   clusterExport(
     cl = cl, varlist = c(
       "mat1", "mat2", "random_effect_variable", "threshold_for_prev", "prevalence_threshold",
-      "f_single_run_lm", "tasks", "f_lm", "f_lmer", "f_lm_cont", "f_lmer_cont", "f_wilcox",
+      "f_single_run_lm", "tasks", "f_lm", "f_lmer", "f_lm_cont", "f_lmer_cont", "f_wilcox","f_kruskal_wallis","f_lmer_anova",
       "compute_CI", "meta", "cont_or_cat_vec", "lev_1_categories","lev_2_categories","custom_lmer_formula"
     ),
     envir = environment()
@@ -81,7 +81,7 @@ f_run_linear_models_parallel <- function(
   # convert selected columns to numeric
   cols_to_convert <- c(
     "effect_size", "lower95CI", "upper95CI", "p_value", "t_value", 
-    "p.val_wilcox","L2FC",
+    "p.val_wilcox","gFC",
     "N_Group1", "N_Group2","N_Samples", "Prev_Group1", "Prev_Group2"
   )
   lmem_res_df <-
@@ -100,14 +100,15 @@ f_run_linear_models_parallel <- function(
   return(lmem_res_df)
 }
 
-i <- 4
-j <- 2
-for(i in seq(1,nrow(mat1))){
-  for(j in seq(1,nrow(mat2))){
-    message("i:",i," j:",j)
-    tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,cont_or_cat_vec)
-  }
-}
+# i <- 1
+# j <- 2
+# cont_or_cat_vec <- rep("categorical",i)
+# for(i in seq(1,nrow(mat1))){
+#   for(j in seq(1,nrow(mat2))){
+#     message("i:",i," j:",j)
+#     tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,cont_or_cat_vec)
+#   }
+# }
 
 f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable, cont_or_cat_vec, 
 threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom_lmer_formula = NULL) {
@@ -194,7 +195,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
     }
     # Temporary check: Stop if more than 10 unique features in categorical x variable
     stopifnot("More than 10 unique features in categorical x -> recheck"=length(all_x_levels) < 10)    
-    tmp_df_list <- list()    
+    tmp_df_list <- list()
     for (c in seq(1, length(all_x_levels))) {
 
       # if there are more than two x-levels, run one-vs-all comparisons for each level of x
@@ -245,7 +246,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
         )
 
         #join wilcoxon test to LM
-        tmp_df <- c(tmp_df,tmp_w_df[c("L2FC","p.val_wilcox")])
+        tmp_df <- c(tmp_df,tmp_w_df[c("gFC","p.val_wilcox")])
 
       }
 
@@ -429,14 +430,24 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,fo
     {
       res <- rstatix::wilcox_test(formula, paired = FALSE,data = df_merged)      
       p_value <- as.numeric(res[1,7])
-      L10FC <- median(y1) - median(y2)
-      L2FC <- L10FC * log2(10)
+      
+      # L10FC <- median(y1) - median(y2)
+      # L2FC <- L10FC * log2(10)      
+      
+      #implement gFC calculation as in the SIAMCAT paper
+      # assumes log-transformed data (- attention: no check implemented)
+      probs.fc <- seq(.1, .9, .05)
+      q.p <- quantile(y1, probs = probs.fc)
+      q.n <- quantile(y2, probs = probs.fc)
+      gFC <- sum(q.p - q.n) / length(q.p)
+
+      
       return(c(feat1 = paste0(feat_name_x,"_",lev1),
                feat2 = feat_name_y,
                Group1 = lev2,
                Group2 = lev1,           
                p.val_wilcox = p_value,
-               L2FC = L2FC,
+               gFC = gFC,
                N_Group1 = N_group1,
                N_Group2 = N_group2,
                Prev_Group1 = Prev_group1,
@@ -448,7 +459,7 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,fo
                Group1 = lev2,
                Group2 = lev1,               
                p.val_wilcox = NA,
-               L2FC = NA,              
+               gFC = NA,              
                N_Group1 = N_group1,
                N_Group2 = N_group2,
                Prev_Group1 = Prev_group1,
