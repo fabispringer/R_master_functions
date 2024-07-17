@@ -82,6 +82,7 @@ f_run_linear_models_parallel <- function(
   cols_to_convert <- c(
     "effect_size", "lower95CI", "upper95CI", "p_value", "t_value", 
     "p.val_wilcox","gFC",
+    "p.val_aov","p.val_kruskal",
     "N_Group1", "N_Group2","N_Samples", "Prev_Group1", "Prev_Group2"
   )
   lmem_res_df <-
@@ -186,10 +187,10 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
         anova_res_df <- f_lmer_anova(x = x, y = y, meta = meta, formula = formula, feat_name_x = feat1, feat_name_y = feat2)
       } else {
         aov_res <- summary(aov(y ~ x))
-        aov_res_df <- c(
+        anova_res_df <- c(
           feat1 = feat1,
           feat2 = feat2,
-          p_value = as.character(aov_res[[1]][["Pr(>F)"]][1])
+          p.val_aov = as.character(aov_res[[1]][["Pr(>F)"]][1])
         )
       }
     }
@@ -215,6 +216,10 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
           threshold_for_prev = threshold_for_prev,
           compute_CI = compute_CI
         )
+        if(length(all_x_levels) > 2){
+          tmp_df <- c(tmp_df,anova_res_df[c("p.val_aov")])
+        }
+
       } else if (model_method == "lm") {
         formula <- as.formula("y~x")
 
@@ -241,6 +246,11 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
 
         #join wilcoxon test to LM
         tmp_df <- c(tmp_df,tmp_w_df[c("gFC","p.val_wilcox")])
+        
+        # add anova and kruskal pvalues
+        if(length(all_x_levels) > 2){
+          tmp_df <- c(tmp_df,anova_res_df[c("p.val_aov")],kruskal_res_df[c("p.val_kruskal")])
+        }
 
       }
 
@@ -343,13 +353,13 @@ f_kruskal_wallis <- function(x,y,feat_name_x,feat_name_y){
       return(c(feat1 = feat_name_x,
                feat2 = feat_name_y,
                #effect_size = 0,
-               p_value = as.numeric(res$p.value)))
+               p.val_kruskal = as.numeric(res$p.value)))
     },
     error=function(e){
       return(c(feat1 = feat_name_x,
                feat2 = feat_name_y,
                #effect_size = NA,
-               p_value = NA))
+               p.val_kruskal = NA))
     }
   )
 }
@@ -369,13 +379,13 @@ f_lmer_anova <- function(x,y,meta,formula,feat_name_x,feat_name_y){
       return(c(feat1 = feat_name_x,
                feat2 = feat_name_y,
                #effect_size = effect_size,
-               p_value = p_value))
+               p.val_aov = p_value))
     },
     error=function(e){
       return(c(feat1 = feat_name_x,
                feat2 = feat_name_y,
                #effect_size = NA,
-               p_value = NA))
+               p.val_aov = NA))
     }
   )
 }
