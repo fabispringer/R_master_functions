@@ -100,14 +100,14 @@ f_run_linear_models_parallel <- function(
   return(lmem_res_df)
 }
 
-# i <- 3
-# j <- 1
-# for(i in seq(1,nrow(mat1))){
-#   for(j in seq(1,nrow(mat2))){
-#     message("i:",i," j:",j)
-#     tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,cont_or_cat_vec)
-#   }
-# }
+i <- 4
+j <- 2
+for(i in seq(1,nrow(mat1))){
+  for(j in seq(1,nrow(mat2))){
+    message("i:",i," j:",j)
+    tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,cont_or_cat_vec)
+  }
+}
 
 f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable, cont_or_cat_vec, 
 threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom_lmer_formula = NULL) {
@@ -161,9 +161,36 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
     }
     tmp_df_list <- list(tmp_df) #to be in agreement with categorical features
   } else if (feature_type == "categorical") {
+    
+    # Define formula for linear mixed models
+    if (model_method == "lmer") {
+      if (!is.null(custom_lmer_formula)) {
+        formula <- as.formula(custom_lmer_formula)
+      } else {
+        formula <- as.formula(paste0("y~x + (1|", random_effect_variable, ")"))
+      }
+    } else {
+      formula <- as.formula("y~x")
+    }
+
     #* Run categorical lmems or lms with any one vs all combination ----    
     all_x_levels <- unique(x)
     
+    # Perform kruskal wallis test if more than two x-levels are present
+    if (length(all_x_levels) > 2) {
+      kruskal_res_df <- f_kruskal_wallis(x = x, y = y, feat_name_x = feat1, feat_name_y = feat2)
+
+      # perform ANOVA using custom formula
+      if(model_method == "lmer"){
+        anova_res_df <- f_lmer_anova(x = x, y = y, meta = meta, formula = formula, feat_name_x = feat1, feat_name_y = feat2)
+      }else{
+        aov_res <- summary(aov(y ~ x))
+        aov_res_df <- c(feat1 = feat1,
+               feat2 = feat2,               
+               p_value = as.character(aov_res[[1]][["Pr(>F)"]][1]))
+        }      
+    }
+
     # Temporary check: Stop if more than 10 unique features in categorical x variable
     stopifnot("More than 10 unique features in categorical x -> recheck"=length(all_x_levels) < 10)
     
@@ -182,15 +209,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
           next
         } # break for loop after 1 iteration to not compute everything N times
       }
-
-
-      if (model_method == "lmer") {
-        if (!is.null(custom_lmer_formula)) {
-        formula <- as.formula(custom_lmer_formula)
-      } else {
-        formula <- as.formula(paste0("y~x + (1|", random_effect_variable, ")"))
-      }
-       
+             
         tmp_df <- f_lmer(
           x = x_binary,
           y = y,
@@ -317,6 +336,53 @@ f_lm <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,comput
     }
   )
   
+}
+
+f_kruskal_wallis <- function(x,y,feat_name_x,feat_name_y){
+  #* A wrapper for the kruskal.test function. Takes a vector x (categorical) and y (continuous) and runs a kruskal.test(y~x).
+  
+  tryCatch(
+    {
+      res <- kruskal.test(x = y,g=x)
+      
+      return(c(feat1 = feat_name_x,
+               feat2 = feat_name_y,
+               #effect_size = 0,
+               p_value = as.numeric(res$p.value)))
+    },
+    error=function(e){
+      return(c(feat1 = feat_name_x,
+               feat2 = feat_name_y,
+               #effect_size = NA,
+               p_value = NA))
+    }
+  )
+}
+
+f_lmer_anova <- function(x,y,meta,formula,feat_name_x,feat_name_y){
+  #* Compute anova using a custom formula ----
+
+  dat_df <- as.data.frame(cbind(x,y))
+  df_merged <- merge(meta,dat_df,by="row.names",all.x=F)
+  df_merged$y <- as.numeric(df_merged$y)
+  tryCatch(
+    {
+      res <- lmerTest::lmer(formula = formula,data = df_merged)
+      aov <- anova(res)
+      p_value <- aov[1,6]
+      effect_size <- 0
+      return(c(feat1 = feat_name_x,
+               feat2 = feat_name_y,
+               #effect_size = effect_size,
+               p_value = p_value))
+    },
+    error=function(e){
+      return(c(feat1 = feat_name_x,
+               feat2 = feat_name_y,
+               #effect_size = NA,
+               p_value = NA))
+    }
+  )
 }
 
 f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,formula=NULL){
