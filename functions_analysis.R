@@ -15,7 +15,7 @@ lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non
 f_run_linear_models_parallel <- function(
   dset_name = "all", mat1, mat2, meta, random_effect_variable = "randomEffFac",
   threshold_for_prev = -3,prevalence_threshold = FALSE,
-  n_cores_max = 10,compute_CI = FALSE,cont_or_cat_vec = NULL) {
+  n_cores_max = 10,compute_CI = FALSE,cont_or_cat_vec = NULL,custom_lmer_formula = NULL) {
   #* Accepts two matrices (mat1, mat2) and a meta data frame. Runs linear (mixed) models in parallel for each combination of rows in mat1 and mat2.
   #* Function is considered to be functional on cluster environments and is parallelized using the parallel package.
   
@@ -51,7 +51,7 @@ f_run_linear_models_parallel <- function(
     cl = cl, varlist = c(
       "mat1", "mat2", "random_effect_variable", "threshold_for_prev", "prevalence_threshold",
       "f_single_run_lm", "tasks", "f_lm", "f_lmer", "f_lm_cont", "f_lmer_cont", "f_wilcox",
-      "compute_CI", "meta", "cont_or_cat_vec", "lev_1_categories","lev_2_categories"
+      "compute_CI", "meta", "cont_or_cat_vec", "lev_1_categories","lev_2_categories","custom_lmer_formula"
     ),
     envir = environment()
   )
@@ -87,8 +87,7 @@ f_run_linear_models_parallel <- function(
   lmem_res_df <-
     lmem_res_df %>%
       add_column(
-        test_type = "linear (mixed) model",
-        formula = Reduce(paste, deparse(formula)),
+        test_type = "linear (mixed) model",        
         dset_name = dset_name
       ) %>%
       mutate(across(
@@ -110,7 +109,8 @@ f_run_linear_models_parallel <- function(
 #   }
 # }
 
-f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable, cont_or_cat_vec, threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE) {
+f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable, cont_or_cat_vec, 
+threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom_lmer_formula = NULL) {
   #* This function is called by f_run_linear_models_parallel with a specific combination of rows in matrix1 and matrix2.
   #* The function performs a prevalence filtering (if selected) and calls the correct linear (mixed) model function (for categorical or cintinuous features)
   
@@ -150,7 +150,11 @@ f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable, cont
   #* Run continuous lmems or lms ----
   if (feature_type == "continuous") {
     if (model_method == "lmer") {
-      formula <- as.formula(paste0("y~x + (1|", random_effect_variable, ")"))
+      if (!is.null(custom_lmer_formula)) {
+        formula <- as.formula(custom_lmer_formula)
+      } else {
+        formula <- as.formula(paste0("y~x + (1|", random_effect_variable, ")"))
+      }
       tmp_df <- f_lmer_cont(x = x, y = y, meta = meta, formula = formula, feat_name_x = feat1, feat_name_y = feat2)
     } else if (model_method == "lm") {
       tmp_df <- f_lm_cont(x = x, y = y, meta = meta, feat_name_x = feat1, feat_name_y = feat2)
@@ -181,11 +185,12 @@ f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable, cont
 
 
       if (model_method == "lmer") {
-        formula <- as.formula(paste0(
-          "y~x +", paste0("(1|", random_effect_variable, ")"),
-          collapse = ""
-        ))
-
+        if (!is.null(custom_lmer_formula)) {
+        formula <- as.formula(custom_lmer_formula)
+      } else {
+        formula <- as.formula(paste0("y~x + (1|", random_effect_variable, ")"))
+      }
+       
         tmp_df <- f_lmer(
           x = x_binary,
           y = y,
@@ -484,7 +489,8 @@ f_lmer <- function(x,y,meta,formula,feat_name_x,feat_name_y,threshold_for_prev =
                N_Group1 = N_group1,
                N_Group2 = N_group2,
                Prev_Group1 = Prev_group1,
-               Prev_Group2 = Prev_group2
+               Prev_Group2 = Prev_group2,
+               formula = paste(deparse(formula, width.cutoff = 500), collapse="")
                ))
     },
     error=function(e){
@@ -500,7 +506,8 @@ f_lmer <- function(x,y,meta,formula,feat_name_x,feat_name_y,threshold_for_prev =
                N_Group1 = N_group1,
                N_Group2 = N_group2,
                Prev_Group1 = Prev_group1,
-               Prev_Group2 = Prev_group2
+               Prev_Group2 = Prev_group2,
+               formula = paste(deparse(formula, width.cutoff = 500), collapse="")
                ))
     }
   )
@@ -528,7 +535,8 @@ f_lmer_cont <- function(x, y, meta, formula, feat_name_x, feat_name_y) {
         effect_size = effect_size,
         p_value = p_value,
         t_value = t_value,
-        N_Samples = N_Samples
+        N_Samples = N_Samples,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse="")
       ))
     },
     error = function(e) {
@@ -538,7 +546,8 @@ f_lmer_cont <- function(x, y, meta, formula, feat_name_x, feat_name_y) {
         effect_size = NA,
         p_value = NA,
         t_value = NA,
-        N_Samples = N_Samples
+        N_Samples = N_Samples,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse="")
       ))
     }
   )
