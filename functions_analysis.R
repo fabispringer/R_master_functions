@@ -100,9 +100,9 @@ f_run_linear_models_parallel <- function(
   return(lmem_res_df)
 }
 
-# i <- 1
+# i <- 4
 # j <- 2
-# cont_or_cat_vec <- rep("categorical",i)
+# cont_or_cat_vec <- rep("categorical",nrow(mat1))
 # for(i in seq(1,nrow(mat1))){
 #   for(j in seq(1,nrow(mat2))){
 #     message("i:",i," j:",j)
@@ -195,25 +195,19 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
     }
     # Temporary check: Stop if more than 10 unique features in categorical x variable
     stopifnot("More than 10 unique features in categorical x -> recheck"=length(all_x_levels) < 10)    
+    comparisons <- combn(unique(x), 2, simplify = FALSE)
     tmp_df_list <- list()
-    for (c in seq(1, length(all_x_levels))) {
+    #for (c in seq(1, length(all_x_levels))) {
+    c <- 1
+    for (c in seq(1, length(comparisons))) {
+      x_binary_idx <- which(x %in% comparisons[[c]])
+      x_binary <- x[x_binary_idx]
+      y_binary <- as.numeric(y[x_binary_idx])
 
-      # if there are more than two x-levels, run one-vs-all comparisons for each level of x
-      x_binary <- x
-      x_binary[x != all_x_levels[c]] <- "all"
-
-      if (length(all_x_levels) == 2) {
-        # pretty stupid to manually reset x_binary within every iteration of the for loop
-        # but for now most efficient
-        x_binary <- x
-        if (c > 1) {
-          next
-        } # break for loop after 1 iteration to not compute everything N times
-      }
       if (model_method == "lmer") {
         tmp_df <- f_lmer(
           x = x_binary,
-          y = y,
+          y = y_binary,
           meta = meta,
           formula = formula,
           feat_name_x = feat1,
@@ -226,7 +220,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
 
         tmp_df <- f_lm(
           x = x_binary,
-          y = y,
+          y = y_binary,
           meta = meta,
           feat_name_x = feat1,
           feat_name_y = feat2,
@@ -237,7 +231,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
         # compute wilcoxon test if only two groups are present
         tmp_w_df <- f_wilcox(
           x = x_binary,
-          y = y,
+          y = y_binary,
           meta = meta,
           feat_name_x = feat1,
           feat_name_y = feat2,
