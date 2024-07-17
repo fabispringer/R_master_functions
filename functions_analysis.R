@@ -181,19 +181,19 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
       kruskal_res_df <- f_kruskal_wallis(x = x, y = y, feat_name_x = feat1, feat_name_y = feat2)
 
       # perform ANOVA using custom formula
-      if(model_method == "lmer"){
+      if (model_method == "lmer") {
         anova_res_df <- f_lmer_anova(x = x, y = y, meta = meta, formula = formula, feat_name_x = feat1, feat_name_y = feat2)
-      }else{
+      } else {
         aov_res <- summary(aov(y ~ x))
-        aov_res_df <- c(feat1 = feat1,
-               feat2 = feat2,               
-               p_value = as.character(aov_res[[1]][["Pr(>F)"]][1]))
-        }      
+        aov_res_df <- c(
+          feat1 = feat1,
+          feat2 = feat2,
+          p_value = as.character(aov_res[[1]][["Pr(>F)"]][1])
+        )
+      }
     }
-
     # Temporary check: Stop if more than 10 unique features in categorical x variable
-    stopifnot("More than 10 unique features in categorical x -> recheck"=length(all_x_levels) < 10)
-    
+    stopifnot("More than 10 unique features in categorical x -> recheck"=length(all_x_levels) < 10)    
     tmp_df_list <- list()    
     for (c in seq(1, length(all_x_levels))) {
 
@@ -209,7 +209,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
           next
         } # break for loop after 1 iteration to not compute everything N times
       }
-             
+      if (model_method == "lmer") {
         tmp_df <- f_lmer(
           x = x_binary,
           y = y,
