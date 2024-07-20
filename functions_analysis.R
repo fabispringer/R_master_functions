@@ -66,6 +66,7 @@ f_run_linear_models_parallel <- function(
       threshold_for_prev = threshold_for_prev,
       prevalence_threshold = prevalence_threshold,
       compute_CI = compute_CI,
+      custom_lmer_formula = custom_lmer_formula,
       cont_or_cat_vec = cont_or_cat_vec
     )
   })
