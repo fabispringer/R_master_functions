@@ -101,8 +101,8 @@ f_run_linear_models_parallel <- function(
   return(lmem_res_df)
 }
 
-# i <- 4
-# j <- 2
+# i <- 1
+# j <- 3
 # cont_or_cat_vec <- rep("categorical",nrow(mat1))
 # for(i in seq(1,nrow(mat1))){
 #   for(j in seq(1,nrow(mat2))){
@@ -374,7 +374,7 @@ f_lmer_anova <- function(x,y,meta,formula,feat_name_x,feat_name_y){
     {
       res <- lmerTest::lmer(formula = formula,data = df_merged)
       aov <- anova(res)
-      p_value <- aov[1,6]
+      p_value <- aov[nrow(aov),6]
       effect_size <- 0
       return(c(feat1 = feat_name_x,
                feat2 = feat_name_y,
@@ -546,9 +546,10 @@ f_lmer <- function(x,y,meta,formula,feat_name_x,feat_name_y,threshold_for_prev =
     {
       res <- lmerTest::lmer(formula = formula,data = df_merged)
       coef <- coefficients(summary(res))
-      p_value <- coef[2,5]
-      effect_size <- coef[2,1]
-      
+      p_value <- coef[nrow(coef),5]
+      effect_size <- coef[nrow(coef),1]
+      t_value <- coef[nrow(coef),4]
+
       if (isTRUE(compute_CI)) {
         suppressMessages(CI <- confint(res))
         lower95CI <- CI[nrow(CI), 1]
@@ -556,8 +557,7 @@ f_lmer <- function(x,y,meta,formula,feat_name_x,feat_name_y,threshold_for_prev =
       } else {
         lower95CI <- NA
         upper95CI <- NA
-      }
-      t_value <- coef[2,4]
+      }      
       return(c(feat1 = paste0(feat_name_x,"_",lev1),
                feat2 = feat_name_y,
                Group1 = lev2, #the mixup is on purpuse 
@@ -607,9 +607,9 @@ f_lmer_cont <- function(x, y, meta, formula, feat_name_x, feat_name_y) {
     {
       res <- lmerTest::lmer(formula = formula, data = df_merged)
       coef <- coefficients(summary(res))
-      p_value <- coef[2, 5]
-      effect_size <- coef[2, 1]
-      t_value <- coef[2, 4]
+      p_value <- coef[nrow(coef), 5]
+      effect_size <- coef[nrow(coef), 1]
+      t_value <- coef[nrow(coef), 4]
       return(c(
         feat1 = feat_name_x,
         feat2 = feat_name_y,
