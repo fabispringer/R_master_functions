@@ -570,8 +570,84 @@ f_plot_signif_matrix <- function(upper_tri_matrix, condition_levels = NULL) {
   return(pt_sig_matrix)
 }
 
+f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_threshold = 0.05,leg_title = NULL) {
+  # Generates a complex heatmap and indicates significant p-values and fdr-significant pvalues 
+
+  require(ComplexHeatmap)
+  require(circlize)
+
+  stopifnot(rownames(hmap_mat) == rownames(mat_p))
+  stopifnot(colnames(hmap_mat) == colnames(mat_p))
+  stopifnot(rownames(hmap_mat) == rownames(mat_p_adj))
+  stopifnot(colnames(hmap_mat) == colnames(mat_p_adj))
+
+  if(is.null(leg_title)){
+    leg_title <- "LegTitle"
+  }  
+  hmap_mat <- hmap_mat[sort(rownames(hmap_mat)), ]
+  mat_p <- mat_p[rownames(hmap_mat),colnames(hmap_mat)]
+  mat_p_adj <- mat_p_adj[rownames(hmap_mat),colnames(hmap_mat)]
+  
+  max_val <- max(round(abs(range(hmap_mat, na.rm = T))))
+  col_range <- c(-max_val, 0, max_val)
+  color_mapping <- circlize::colorRamp2(col_range, c("#74BAD3", "white", "#EB472E"))
+  colLabs <- as.expression(lapply(colnames(hmap_mat), function(a) bquote(bolditalic(.(a)))))
+  rowLabs <- as.expression(lapply(rownames(hmap_mat), function(a) bquote(bold(.(a)))))
+
+  lgd_main <- Legend(
+    col_fun = color_mapping,
+    title = leg_title,
+    legend_height = unit(2.5, "cm"),
+    direction = c("vertical"),
+    border = NA
+  )
+  l2 <- Legend(labels = c(paste0("p<", p_threshold)), title = "", type = "points", pch = 20, legend_gp = gpar(col = 1), size = unit(1, "mm"), background = NA)
+  l3 <- Legend(labels = c(paste0("q<", fdr_threshold)), title = "", type = "points", pch = 8, legend_gp = gpar(col = 1), size = unit(1, "mm"), background = NA)
+  leg_combined <- packLegend(lgd_main, l2, l3, direction = "vertical")
+  pt_HM <- ComplexHeatmap::Heatmap(
+    # column_title = "Abundance of CRC associated genera by sample",
+    hmap_mat,
+    #  bottom_annotation = col_anno,
+    #  top_annotation = bar_anno,
+    cluster_rows = F,
+    cluster_columns = T,
+    show_row_dend = F,
+    show_column_dend = F,
+    col = color_mapping,
+    column_labels = colLabs,    
+    row_labels = rowLabs,
+    
+    
+
+    column_names_rot = 45, column_names_side = "bottom",
+    show_column_names = T,
+    row_names_gp = gpar(fontsize = 6),
+    row_names_side = c("left"),
+    column_names_gp = gpar(fontsize = 6),
+    show_heatmap_legend = FALSE,
+    border = T,
+    #rect_gp = gpar(col = "darkgrey", lwd = 1),
 
 
+    # if(!is.null(mat_p_adjusted) & !(is.null(mat_p))) {
+    # Indicate p-values < 0.05 and p.val_adj < 0.001
+    layer_fun = function(j, i, x, y, width, height, fill) {
+      # Show border around significant tiles
+      sig_lvls_fdr <- pindex(mat_p_adj, i, j)
+      sig_lvls_p <- pindex(mat_p, i, j)
+      l <- sig_lvls_fdr < fdr_threshold
+      p <- (sig_lvls_p < p_threshold & sig_lvls_fdr >= fdr_threshold)
+      if (any(l)) {
+        grid.points(x[l], y[l], pch = 8, size = unit(1.5, "mm"))
+      }
+      if (any(p)) {
+        grid.points(x[p], y[p], pch = 16, size = unit(1, "mm"))
+      }
+    }
+    # }
+  )
+  return(draw(pt_HM, annotation_legend_list = leg_combined))
+}
 
 
 
