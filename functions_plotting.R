@@ -570,7 +570,8 @@ f_plot_signif_matrix <- function(upper_tri_matrix, condition_levels = NULL) {
   return(pt_sig_matrix)
 }
 
-f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_threshold = 0.05,leg_title = NULL) {
+f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_threshold = 0.05,leg_title = NULL,
+cluster_rows = F,cluster_columns =F) {
   # Generates a complex heatmap and indicates significant p-values and fdr-significant pvalues 
 
   require(ComplexHeatmap)
@@ -609,8 +610,8 @@ f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_
     hmap_mat,
     #  bottom_annotation = col_anno,
     #  top_annotation = bar_anno,
-    cluster_rows = F,
-    cluster_columns = T,
+    cluster_rows = cluster_rows,
+    cluster_columns = cluster_columns,
     show_row_dend = F,
     show_column_dend = F,
     col = color_mapping,
