@@ -12,12 +12,25 @@ require(ggsignif)
 # ggembl can be downloaded here: https://git.embl.de/grp-zeller/ggembl
 theme_paper <- ggembl::theme_presentation() +
     theme(
-        axis.title = element_text(face = "bold", size = 12), # Bold axis titles
+        axis.title = element_text(face = "bold", size = 10), # Bold axis titles
         panel.border = element_rect(fill=NA, colour='black', size=1.5),
         #axis.line = element_line(size = 1.5), # Change line thickness of axes
 
-        axis.text = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 10),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8)
     )
+
+# theme_figure <- ggembl::theme_presentation() +
+#     theme(
+#         axis.title = element_text(face = "bold", size = 10), # Bold axis titles
+#         panel.border = element_rect(fill=NA, colour='black', size=1.5),
+#         #axis.line = element_line(size = 1.5), # Change line thickness of axes
+
+#         axis.text = element_text(face = "bold", size = 10),
+#     )
+
+
 
 leg_inside <-
     theme(
@@ -201,7 +214,7 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
     ggrepel::geom_text_repel(aes(label = lab, fontface = font),
       color = "black",
       segment.color = "black",
-      size = 3,
+      size = 2,
       seed = 420
     )
 
@@ -218,13 +231,13 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
     guides(
       color = "none",
       size = guide_legend(order = 1, reverse = T),
-      fill = guide_legend(order = 2, override.aes = list(size = 3.5))
+      fill = guide_legend(order = 2, override.aes = list(size = 2.5))
     ) +
     scale_x_continuous(breaks = xBreaks, labels = xBreaks, limits = xLims) +
     scale_y_continuous(breaks = man_y_breaks, labels = man_y_labs, name = yName, position = "left", limits = man_y_lims) +
     xlab("Enrichment effect size") + 
-    annotate("text", x = xLims[1], y = -Inf, label = paste0(group1," (N=",N_group1,")"), hjust = -0.01, vjust = -0.75, fontface = "bold") +
-    annotate("text", x = xLims[2], y = -Inf, label = paste0(group2," (N=",N_group2,")"), hjust = 0.99, vjust = -0.75, fontface = "bold")
+    annotate("text", x = xLims[1], y = -Inf, label = paste0(group1," (N=",N_group1,")"), hjust = -0.01, vjust = -0.75, fontface = "bold",size = 3) +
+    annotate("text", x = xLims[2], y = -Inf, label = paste0(group2," (N=",N_group2,")"), hjust = 0.99, vjust = -0.75, fontface = "bold",size = 3)
   
   return(pt_res)
 }
@@ -591,6 +604,8 @@ cluster_rows = F,cluster_columns =F) {
   
   max_val <- max(round(abs(range(hmap_mat, na.rm = T))))
   col_range <- c(-max_val, 0, max_val)
+  ##AA0827
+  ##363B81
   color_mapping <- circlize::colorRamp2(col_range, c("#74BAD3", "white", "#EB472E"))
   colLabs <- as.expression(lapply(colnames(hmap_mat), function(a) bquote(bolditalic(.(a)))))
   rowLabs <- as.expression(lapply(rownames(hmap_mat), function(a) bquote(bold(.(a)))))
