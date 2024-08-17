@@ -145,6 +145,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
   }
 
   # Check whether lm or lmems should be run
+  
   if (length(unique(meta[names(y), ][[random_effect_variable]])) > 1) {
     model_method <- "lmer"
     # message("Running linear-mixed effects models with:\n", random_effect_variable, "\nas random effect")
@@ -175,6 +176,8 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
       } else {
         formula <- as.formula(paste0("y~x + (1|", random_effect_variable, ")"))
       }
+    } else if(!is.null(custom_lmer_formula)){
+      formula <- as.formula(custom_lmer_formula)
     } else {
       formula <- as.formula("y~x")
     }
@@ -241,11 +244,12 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
         }
 
       } else if (model_method == "lm") {
-        formula <- as.formula("y~x")
+        #formula <- as.formula("y~x")
 
         tmp_df <- f_lm(
           x = x_binary,
           y = y_binary,
+          formula = formula,
           meta = meta,
           feat_name_x = feat1,
           feat_name_y = feat2,
@@ -287,7 +291,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
   return(do.call(rbind, tmp_df_list))
 }
 
-f_lm <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,compute_CI = FALSE){
+f_lm <- function(x,y,formula,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,compute_CI = FALSE){
   #* A wrapper for the lm function. Takes a vector x (categorical) and y (continuous) and runs a lm(y~x).
   # If x has more than 2 levels, the function will run a one-vs-all comparison for each level of x.
 
@@ -321,11 +325,11 @@ f_lm <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,comput
 
   tryCatch(
     {
-      res <- lm(y ~ x,data = df_merged)
+      res <- lm(formula,data = df_merged)
       coef <- coefficients(summary(res))
-      p_value <- coef[2,4]
-      effect_size <- coef[2,1]
-      t_value <- coef[2,3]
+      p_value <- coef[nrow(coef),4]
+      effect_size <- coef[nrow(coef),1]
+      t_value <- coef[nrow(coef),3]
       if (isTRUE(compute_CI)) {
         suppressMessages(CI <- confint(res))
         lower95CI <- CI[nrow(CI), 1]
@@ -346,7 +350,8 @@ f_lm <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,comput
                N_Group1 = N_group1,
                N_Group2 = N_group2,
                Prev_Group1 = Prev_group1,
-               Prev_Group2 = Prev_group2))
+               Prev_Group2 = Prev_group2,
+               formula = paste(deparse(formula, width.cutoff = 500), collapse="")))
     },
     error=function(e){
       return(c(feat1 = paste0(feat_name_x,"_",lev1),
@@ -361,7 +366,8 @@ f_lm <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,comput
                N_Group1 = N_group1,
                N_Group2 = N_group2,
                Prev_Group1 = Prev_group1,
-               Prev_Group2 = Prev_group2))
+               Prev_Group2 = Prev_group2,
+               formula = paste(deparse(formula, width.cutoff = 500), collapse="")))
     }
   )
   
