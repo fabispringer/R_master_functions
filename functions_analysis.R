@@ -8,12 +8,13 @@ require(progress)
 
 # Define which categories will be considered as first/second labels.
 # lev_2_categories are considered as baseline in the testing functions
-lev_1_categories <- c("male", "1","N1","M1","L1","high", "multinodular", "Inflamed", "present", "Tumor", "viral_HCC", "ALD/ASH_HCC", "HBV_HCC","yes","responder","iCCA","CRLM")
-lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non-tumor_HCC","Adj. non-tumor","EarlyFib","LateFib","0","Healthy","Normal")
+lev_1_categories <- c("male", "1","N1","M1","L1","high", "multinodular", "Inflamed", "present", "Tumor", "viral_HCC", "ALD/ASH_HCC", "HBV_HCC","yes","responder","iCCA","CRLM","Fuso+","Prev+","Trep+","Campy+","Bacteroideae+")
+lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non-tumor_HCC","Adj. non-tumor","EarlyFib","LateFib","0","Healthy","Normal","Bact-")
 
 
 f_run_linear_models_parallel <- function(
   dset_name = "all", mat1, mat2, meta, random_effect_variable = "randomEffFac",
+  paired_wilcox_by = NULL,
   threshold_for_prev = -3,prevalence_threshold = FALSE,
   n_cores_max = 10,compute_CI = FALSE,cont_or_cat_vec = NULL,custom_lmer_formula = NULL) {
   #* Accepts two matrices (mat1, mat2) and a meta data frame. Runs linear (mixed) models in parallel for each combination of rows in mat1 and mat2.
@@ -25,6 +26,7 @@ f_run_linear_models_parallel <- function(
   stopifnot(all(colnames(mat1) == colnames(mat2)))
   stopifnot(random_effect_variable %in% colnames(meta))
   stopifnot(is.matrix(mat1) & is.matrix(mat2))
+  stopifnot(paired_wilcox_by %in% colnames(meta))
 
   #if no cont_or_cat vector is given, assume binary features in mat1
   if(is.null(cont_or_cat_vec)){
@@ -49,7 +51,7 @@ f_run_linear_models_parallel <- function(
   # Export variables and load libraries to the cluster
   clusterExport(
     cl = cl, varlist = c(
-      "mat1", "mat2", "random_effect_variable", "threshold_for_prev", "prevalence_threshold",
+      "mat1", "mat2", "random_effect_variable", "paired_wilcox_by", "threshold_for_prev", "prevalence_threshold",
       "f_single_run_lm", "tasks", "f_lm", "f_lmer", "f_lm_cont", "f_lmer_cont", "f_wilcox","f_kruskal_wallis","f_lmer_anova",
       "compute_CI", "meta", "cont_or_cat_vec", "lev_1_categories","lev_2_categories","custom_lmer_formula"
     ),
@@ -65,6 +67,7 @@ f_run_linear_models_parallel <- function(
       mat1, mat2, meta=meta, random_effect_variable, #model_method,
       threshold_for_prev = threshold_for_prev,
       prevalence_threshold = prevalence_threshold,
+      paired_wilcox_by = paired_wilcox_by,
       compute_CI = compute_CI,
       custom_lmer_formula = custom_lmer_formula,
       cont_or_cat_vec = cont_or_cat_vec
@@ -84,7 +87,7 @@ f_run_linear_models_parallel <- function(
     "effect_size", "lower95CI", "upper95CI", "p_value", "t_value", 
     "p.val_wilcox","gFC",
     "p.val_aov","p.val_kruskal",
-    "N_Group1", "N_Group2","N_Samples", "Prev_Group1", "Prev_Group2"
+    "N_Group1", "N_Group2","N_Pairs","N_Samples", "Prev_Group1", "Prev_Group2"
   )
   lmem_res_df <-
     lmem_res_df %>%
@@ -103,7 +106,7 @@ f_run_linear_models_parallel <- function(
 }
 
 # i <- 1
-# j <- 3
+# j <- 2
 # cont_or_cat_vec <- rep("categorical",nrow(mat1))
 # for(i in seq(1,nrow(mat1))){
 #   for(j in seq(1,nrow(mat2))){
@@ -112,7 +115,7 @@ f_run_linear_models_parallel <- function(
 #   }
 # }
 
-f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable, cont_or_cat_vec, 
+f_single_run_lm <- function(i, j, mat1, mat2, meta, random_effect_variable,paired_wilcox_by, cont_or_cat_vec, 
 threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom_lmer_formula = NULL) {
   #* This function is called by f_run_linear_models_parallel with a specific combination of rows in matrix1 and matrix2.
   #* The function performs a prevalence filtering (if selected) and calls the correct linear (mixed) model function (for categorical or cintinuous features)
@@ -217,6 +220,22 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
           threshold_for_prev = threshold_for_prev,
           compute_CI = compute_CI
         )
+        if(!is.null(paired_wilcox_by)){
+          # compute paired wilcoxon test
+          tmp_w_df <- f_wilcox(
+            x = x_binary,
+            y = y_binary,
+            meta = meta,
+            paired_wilcox_by = paired_wilcox_by,
+            feat_name_x = feat1,
+            feat_name_y = feat2,
+            threshold_for_prev = threshold_for_prev,
+            formula = NULL
+          )
+        #join wilcoxon test to LM
+        tmp_df <- c(tmp_df,tmp_w_df[c("gFC","p.val_wilcox")])
+        }
+
         if(length(all_x_levels) > 2){
           tmp_df <- c(tmp_df,anova_res_df[c("p.val_aov")])
         }
@@ -241,13 +260,17 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
           meta = meta,
           feat_name_x = feat1,
           feat_name_y = feat2,
+          paired_wilcox_by = paired_wilcox_by,
           threshold_for_prev = threshold_for_prev,
           formula = NULL
         )
 
-        #join wilcoxon test to LM
-        tmp_df <- c(tmp_df,tmp_w_df[c("gFC","p.val_wilcox")])
-        
+        if (is.null(paired_wilcox_by)) {
+          # join wilcoxon test to LM
+          tmp_df <- c(tmp_df, tmp_w_df[c("gFC", "p.val_wilcox")])
+        }else{
+          tmp_df <- c(tmp_df, tmp_w_df[c("gFC", "p.val_wilcox","N_Pairs")])
+        }
         # add anova and kruskal pvalues
         if(length(all_x_levels) > 2){
           tmp_df <- c(tmp_df,anova_res_df[c("p.val_aov")],kruskal_res_df[c("p.val_kruskal")])
@@ -391,13 +414,17 @@ f_lmer_anova <- function(x,y,meta,formula,feat_name_x,feat_name_y){
   )
 }
 
-f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,formula=NULL){
+f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,paired_wilcox_by = NULL,threshold_for_prev = -3,formula=NULL){
   #* compute wilcoxon test analogous to simple linear models ----
   
   if(is.null(formula)){
     formula <- as.formula("y~x")
   }else {
      formula <- as.formula(formula)
+  }
+  if(!is.null(paired_wilcox_by)){
+    paired = TRUE
+    stopifnot(paired_wilcox_by %in% colnames(meta))
   }
   
   dat_df <- as.data.frame(cbind(x,y))
@@ -421,6 +448,26 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,fo
   }
 
   df_merged$x <- factor(df_merged$x,levels = c(lev2,lev1))
+
+  # if paired testing is performed, remove incomplete cases
+  if(!is.null(paired_wilcox_by)){
+    #complete_pairs <- df_merged %>% group_by(!!as.symbol(paired_wilcox_by)) %>% summarise(n = n()) %>% filter(n == 2) %>% pull(!!as.symbol(paired_wilcox_by)) %>% sort()
+    complete_pairs <- unique(df_merged[[paired_wilcox_by]][
+      ave(df_merged[[paired_wilcox_by]], df_merged[[paired_wilcox_by]], FUN = length) == 2
+    ])
+    complete_pairs <- sort(complete_pairs)
+    
+    # filter and sort
+    # df_merged <- df_merged %>%
+    #   filter(!!as.symbol(paired_wilcox_by) %in% complete_pairs) %>%
+    #   arrange(!!as.symbol(paired_wilcox_by), x)    
+    df_merged <- df_merged[df_merged[[paired_wilcox_by]] %in% complete_pairs, ]
+    df_merged <- df_merged[order(df_merged[[paired_wilcox_by]], df_merged$x), ]
+    
+    N_Pairs <- length(complete_pairs)
+        
+  }
+  
   N_group1 <- nrow(subset(df_merged,x == lev2))
   N_group2 <- nrow(subset(df_merged,x == lev1))
   # Compute prevalence
@@ -433,7 +480,7 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,fo
     
   tryCatch(
     {
-      res <- rstatix::wilcox_test(formula, paired = FALSE,data = df_merged)      
+      res <- rstatix::wilcox_test(formula, paired = paired,data = df_merged)      
       p_value <- as.numeric(res[1,7])
       
       # L10FC <- median(y1) - median(y2)
@@ -446,17 +493,35 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,threshold_for_prev = -3,fo
       q.n <- quantile(y2, probs = probs.fc)
       gFC <- sum(q.p - q.n) / length(q.p)
 
-      
-      return(c(feat1 = paste0(feat_name_x,"_",lev1),
-               feat2 = feat_name_y,
-               Group1 = lev2,
-               Group2 = lev1,           
-               p.val_wilcox = p_value,
-               gFC = gFC,
-               N_Group1 = N_group1,
-               N_Group2 = N_group2,
-               Prev_Group1 = Prev_group1,
-               Prev_Group2 = Prev_group2))
+      if (is.null(paired_wilcox_by)) {
+        res_vec <- c(
+          feat1 = paste0(feat_name_x, "_", lev1),
+          feat2 = feat_name_y,
+          Group1 = lev2,
+          Group2 = lev1,
+          p.val_wilcox = p_value,
+          gFC = gFC,
+          N_Group1 = N_group1,
+          N_Group2 = N_group2,
+          Prev_Group1 = Prev_group1,
+          Prev_Group2 = Prev_group2
+        )
+      }else {
+        # For paired wilcoxon test, return number of complete cases
+         res_vec <- c(
+          feat1 = paste0(feat_name_x, "_", lev1),
+          feat2 = feat_name_y,
+          Group1 = lev2,
+          Group2 = lev1,
+          p.val_wilcox = p_value,
+          gFC = gFC,          
+          N_Pairs = N_Pairs,
+          Prev_Group1 = Prev_group1,
+          Prev_Group2 = Prev_group2
+        )
+      }
+
+      return(res_vec)
     },
     error=function(e){
       return(c(feat1 = paste0(feat_name_x,"_",lev1),
