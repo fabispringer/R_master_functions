@@ -85,7 +85,7 @@ f_run_linear_models_parallel <- function(
   # convert selected columns to numeric
   cols_to_convert <- c(
     "effect_size", "lower95CI", "upper95CI", "p_value", "t_value", 
-    "p.val_wilcox","gFC",
+    "p.val_wilcox","gFC","L2FC_mean",
     "p.val_aov","p.val_kruskal",
     "N_Group1", "N_Group2","N_Pairs","N_Samples", "Prev_Group1", "Prev_Group2"
   )
@@ -273,7 +273,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
           # join wilcoxon test to LM
           tmp_df <- c(tmp_df, tmp_w_df[c("gFC", "p.val_wilcox")])
         }else{
-          tmp_df <- c(tmp_df, tmp_w_df[c("gFC", "p.val_wilcox","N_Pairs")])
+          tmp_df <- c(tmp_df, tmp_w_df[c("L2FC_mean", "p.val_wilcox","N_Pairs")])
         }
         # add anova and kruskal pvalues
         if(length(all_x_levels) > 2){
@@ -514,13 +514,17 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,paired_wilcox_by = NULL,th
         )
       }else {
         # For paired wilcoxon test, return number of complete cases
+        #compute mean L2FC
+        L10FC  <- y1 - y2
+        meanL2FC  <- mean(L10FC * log2(10)) #convert to log2
+
          res_vec <- c(
           feat1 = paste0(feat_name_x, "_", lev1),
           feat2 = feat_name_y,
           Group1 = lev2,
           Group2 = lev1,
           p.val_wilcox = p_value,
-          gFC = gFC,          
+          L2FC_mean = meanL2FC,          
           N_Pairs = N_Pairs,
           Prev_Group1 = Prev_group1,
           Prev_Group2 = Prev_group2
