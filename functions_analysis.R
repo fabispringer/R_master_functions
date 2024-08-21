@@ -430,6 +430,8 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,paired_wilcox_by = NULL,th
   if(!is.null(paired_wilcox_by)){
     paired = TRUE
     stopifnot(paired_wilcox_by %in% colnames(meta))
+  }else{
+    paired = FALSE
   }
   
   dat_df <- as.data.frame(cbind(x,y))
