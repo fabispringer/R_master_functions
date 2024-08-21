@@ -584,7 +584,7 @@ f_plot_signif_matrix <- function(upper_tri_matrix, condition_levels = NULL) {
 }
 
 f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_threshold = 0.05,leg_title = NULL,
-cluster_rows = F,cluster_columns =F) {
+cluster_rows = F,cluster_columns = F) {
   # Generates a complex heatmap and indicates significant p-values and fdr-significant pvalues 
 
   require(ComplexHeatmap)
@@ -602,6 +602,16 @@ cluster_rows = F,cluster_columns =F) {
   mat_p <- mat_p[rownames(hmap_mat),colnames(hmap_mat)]
   mat_p_adj <- mat_p_adj[rownames(hmap_mat),colnames(hmap_mat)]
   
+
+  # If shannon, richness or total bacteria in heatmap, introduce column splot
+  div_measures <- str_detect(colnames(hmap_mat), "annon|ichness|otal")
+  if(any(div_measures)){
+    col_split <- ifelse(div_measures, rep(c("A"),ncol(hmap_mat)), rep(c("B"),ncol(hmap_mat)))
+  } else {
+    col_split <- rep(c("A"),ncol(hmap_mat))
+  }  
+
+
   max_val <- max(round(abs(range(hmap_mat, na.rm = T))))
   col_range <- c(-max_val, 0, max_val)
   ##AA0827
@@ -633,6 +643,10 @@ cluster_rows = F,cluster_columns =F) {
     column_labels = colLabs,    
     row_labels = rowLabs,
     
+    # Col split
+    column_split = col_split,
+    column_title=NULL,
+    row_title=NULL,
     
 
     column_names_rot = 45, column_names_side = "bottom",
