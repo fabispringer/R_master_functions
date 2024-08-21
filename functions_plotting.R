@@ -345,9 +345,13 @@ f_compute_PCoA <- function(meta_df, mat, method = "bray", threshold_for_prevalen
   #   method = "bray",
   #   padj = "fdr"
   # )
+  x_lab <- paste0("PCoA1 [", res$var_expl_df[1, 1], "%]")
+  y_lab <- paste0("PCoA2 [", res$var_expl_df[1, 2], "%]")
+  z_lab <- paste0("PCoA3 [", res$var_expl_df[1, 3], "%]")
+  asp_ratio <- res$var_expl_df$`PCo2[%]` / res$var_expl_df$`PCo1[%]`
 
 
-  return(list(PCO_res = res, var_expl_df = var_expl))
+  return(list(PCO_res = res, var_expl_df = var_expl,x_lab = x_lab,y_lab = y_lab,asp_ratio = asp_ratio))
 }
 
 f_fetch_ncbi_taxonomy <- function(tax_names) {
