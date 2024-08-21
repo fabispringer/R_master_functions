@@ -13,21 +13,20 @@ lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non
 
 
 f_run_linear_models_parallel <- function(
-  dset_name = "all", mat1, mat2, meta, random_effect_variable = "randomEffFac",
-  paired_wilcox_by = NULL,
+  dset_name = "all", mat1, mat2, meta, random_effect_variable = "randomEffFac",paired_wilcox_by = NULL,
   threshold_for_prev = -3,prevalence_threshold = FALSE,
   n_cores_max = 10,compute_CI = FALSE,cont_or_cat_vec = NULL,custom_lmer_formula = NULL) {
   #* Accepts two matrices (mat1, mat2) and a meta data frame. Runs linear (mixed) models in parallel for each combination of rows in mat1 and mat2.
-  #* Function is considered to be functional on cluster environments and is parallelized using the parallel package.
-  
+  #* Function is considered to be functional on cluster environments and is parallelized using the parallel package.  
   require(parallel) # For parallelization
   require(pbapply)
   # Initialization and checks
   stopifnot(all(colnames(mat1) == colnames(mat2)))
   stopifnot(random_effect_variable %in% colnames(meta))
   stopifnot(is.matrix(mat1) & is.matrix(mat2))
-  stopifnot(paired_wilcox_by %in% colnames(meta))
-
+  if(!is.null(paired_wilcox_by)) {
+    stopifnot(paired_wilcox_by %in% colnames(meta))
+  }
   #if no cont_or_cat vector is given, assume binary features in mat1
   if(is.null(cont_or_cat_vec)){
     cont_or_cat_vec <- rep("categorical",nrow(mat1))
@@ -105,13 +104,13 @@ f_run_linear_models_parallel <- function(
   return(lmem_res_df)
 }
 
-# i <- 1
-# j <- 2
+# # i <- 1
+# # j <- 2
 # cont_or_cat_vec <- rep("categorical",nrow(mat1))
 # for(i in seq(1,nrow(mat1))){
 #   for(j in seq(1,nrow(mat2))){
 #     message("i:",i," j:",j)
-#     tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,cont_or_cat_vec)
+#     tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,paired_wilcox_by,cont_or_cat_vec)
 #   }
 # }
 
@@ -202,7 +201,7 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
       }
     }
     # Temporary check: Stop if more than 10 unique features in categorical x variable
-    stopifnot("More than 10 unique features in categorical x -> recheck"=length(all_x_levels) < 10)    
+    stopifnot("More than 20 unique features in categorical x -> recheck"=length(all_x_levels) < 20)
     comparisons <- combn(unique(x), 2, simplify = FALSE)
     tmp_df_list <- list()
     #for (c in seq(1, length(all_x_levels))) {
