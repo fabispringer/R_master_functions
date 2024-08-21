@@ -241,6 +241,121 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
   
   return(pt_res)
 }
+f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_breaks=NULL,clean_tax_names=FALSE,add_to_y_axis = 0.25){
+  # Takes a dataframe with testing results and generates a volcano plot
+  # equivalent to the volcano function but assumes p-adj. vales as input
+
+  stopifnot(all(c("p.val_adj","effect.size","tax") %in% colnames(plot_df)))
+
+  leg_text_size <- 8
+  yName <- "P-value (adj.)"
+  pMethod <- "p.val_adj"
+
+
+  # Define y-axis breaks if not supplied
+  if(is.null(man_y_breaks)) {
+    # For all except fibrosis
+    man_y_breaks <- -log10(c(0.05,0.01,0.001,0.0001,0.00001))#,0.000001))    
+  }  
+  man_y_labs <- signif(10^-man_y_breaks,1)
+  man_y_lims <- c(0,round(max(man_y_breaks+add_to_y_axis),1))
+
+  # Check if supplied y-axis and x-axis limits are valid
+  if (min(plot_df[[pMethod]]) < min(10^-(man_y_breaks))) {
+    stop("smallest p-value is smaller than y-axis")
+  }
+  if (min(xLims) > min(plot_df$effect.size) | max(xLims) < max(plot_df$effect.size)) {
+    stop("xlimits smaller than effect size")
+  }
+
+  # Clean taxon names if requested
+  if (isTRUE(clean_tax_names)) {
+      plot_df <- plot_df %>% mutate(lab = f_create_label(tax))
+  } else {
+      plot_df <- plot_df %>% mutate(lab = tax)
+  }
+
+  # extract Group names, Group numbers
+  group1 <- unique(plot_df$Group1)
+  group2 <- unique(plot_df$Group2)
+  N_group1 <- unique(plot_df$N_Group1)
+  N_group2 <- unique(plot_df$N_Group2)
+
+  # Step1: Do some checks for significances etc
+  plot_df <- plot_df %>%
+    mutate(
+      enriched_in =
+        case_when(
+          p.val_adj < fdr_thresh & effect.size > 0 ~ group2,
+          p.val_adj < fdr_thresh & effect.size < 0 ~ group1,
+          TRUE ~ "n.s."
+        ),
+      # Define whether a taxon is FDR significant or not
+      fdr_sig = ifelse(p.val_adj < fdr_thresh, TRUE, FALSE),
+    ) %>%
+    mutate(
+      enriched_in = factor(enriched_in, levels = c(group1, group2, "n.s.")),
+      font = ifelse(fdr_sig, "bold.italic", "italic"), # for labeling
+      group_prev = ifelse(effect.size > 0, Prev_Group2, Prev_Group1), # size based on prevalence in group
+      lab := case_when((!!as.symbol(pMethod) < 0.05 | p.val_adj < fdr_thresh) & lab != "." ~ lab, TRUE ~ "")
+    )  
+  # Step2: Do the actual plotting
+  pt <- plot_df %>%
+    arrange(rev(enriched_in)) %>% 
+    ggplot(aes(x = effect.size, y = -log10(!!as.symbol(pMethod)))) +
+    theme_paper +
+    #geom_hline(yintercept = man_y_breaks[2:length(man_y_breaks) - 1], color = "grey", lty = "solid", lwd = 0.2) +
+    geom_hline(yintercept = man_y_breaks[2:length(man_y_breaks)], color = "grey", lty = "solid", lwd = 0.2) +
+    geom_hline(yintercept = -log10(fdr_thresh), color = "black", lty = "solid", lwd = 0.5) +    
+    geom_point(      
+      aes(
+        size = group_prev,
+        fill = enriched_in
+      ),
+      shape = 21, color = "black", alpha = 0.75,stroke = 1
+    ) +
+    # add second geom point for unknown compounds
+    geom_point(data = plot_df %>% filter(tax == ".", p.val_adj < fdr_thresh),       
+      shape = 20, color = "black", size = 0.5
+    ) +
+
+    scale_size(range = c(2, 5), guide = guide_legend(reverse = TRUE)) + # Adjust this range as needed
+    ggrepel::geom_text_repel(aes(label = lab, fontface = font),
+      color = "black",
+      segment.color = "black",
+      size = 2,
+      seed = 420
+    )
+
+  # Refine plot with legends and axis etc
+  pt_res <- pt +
+    theme(
+      legend.box = "horizontal",
+      legend.spacing.y = unit(0.1, "cm"),
+      legend.position = c(.01, .99),
+      legend.key.size = unit(0.75, "lines"),
+      legend.justification = c(0, 1)
+    ) +
+    labs(fill = paste0("P-adj. < ",fdr_thresh), size = "Prevalence") +
+    guides(
+      color = "none",
+      size = guide_legend(order = 1, reverse = T),
+      fill = guide_legend(order = 2, override.aes = list(size = 3.5))
+    ) +
+    scale_x_continuous(breaks = xBreaks, labels = xBreaks, limits = xLims) +
+    scale_y_continuous(breaks = man_y_breaks, labels = man_y_labs, name = yName, position = "left", limits = man_y_lims) +
+    xlab("Enrichment effect size") + 
+    annotate("text", x = xLims[1], y = -Inf, label = paste0(group1," (N=",N_group1,")"), hjust = -0.01, vjust = -0.75, fontface = "bold") +
+    annotate("text", x = xLims[2], y = -Inf, label = paste0(group2," (N=",N_group2,")"), hjust = 0.99, vjust = -0.75, fontface = "bold")
+  
+  return(pt_res)
+}
+
+
+
+
+
+
 
 f_boxplot_by_group <- function(plot_df,xlab,ylab,corral.width = 0.49){
     # Function to create a boxplot with half-violin and beeswarm plot
