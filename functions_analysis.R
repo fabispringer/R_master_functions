@@ -110,7 +110,7 @@ f_run_linear_models_parallel <- function(
 # for(i in seq(1,nrow(mat1))){
 #   for(j in seq(1,nrow(mat2))){
 #     message("i:",i," j:",j)
-#     tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,paired_wilcox_by,cont_or_cat_vec)
+#     tmp <- f_single_run_lm(i,j,mat1,mat2,meta,random_effect_variable,paired_wilcox_by,cont_or_cat_vec,custom_lmer_formula = custom_lmer_formula)
 #   }
 # }
 
@@ -163,7 +163,12 @@ threshold_for_prev = -3, prevalence_threshold = FALSE, compute_CI = FALSE,custom
       }
       tmp_df <- f_lmer_cont(x = x, y = y, meta = meta, formula = formula, feat_name_x = feat1, feat_name_y = feat2)
     } else if (model_method == "lm") {
-      tmp_df <- f_lm_cont(x = x, y = y, meta = meta, feat_name_x = feat1, feat_name_y = feat2)
+      if(!is.null(custom_lmer_formula)){
+        formula <- as.formula(custom_lmer_formula)
+      } else {
+        formula <- as.formula("y~x")
+      }
+      tmp_df <- f_lm_cont(x = x, y = y, meta = meta, formula = formula, feat_name_x = feat1, feat_name_y = feat2)
     }
     tmp_df_list <- list(tmp_df) #to be in agreement with categorical features
   } else if (feature_type == "categorical") {
@@ -550,7 +555,7 @@ f_wilcox <- function(x,y,meta,feat_name_x,feat_name_y,paired_wilcox_by = NULL,th
 
 }
 
-f_lm_cont <- function(x, y, meta, feat_name_x, feat_name_y) {
+f_lm_cont <- function(x, y, meta,formula,feat_name_x, feat_name_y) {
   #* A wrapper for the lm function - for continuous variables. Takes a vector x and y and runs lm(y~x)
   dat_df <- as.data.frame(cbind(x, y))
   df_merged <- merge(meta, dat_df, by = "row.names", all.x = F)
@@ -559,18 +564,20 @@ f_lm_cont <- function(x, y, meta, feat_name_x, feat_name_y) {
   N_Samples <- nrow(df_merged)
   tryCatch(
     {
-      res <- lm(y ~ x, data = df_merged)
-      coef <- coefficients(summary(res))
-      p_value <- coef[2, 4]
-      effect_size <- coef[2, 1]
-      t_value <- coef[2, 3]
+      res <- lm(formula, data = df_merged)
+      coef <- coefficients(summary(res))      
+      p_value <- coef[nrow(coef), 4]
+      effect_size <- coef[nrow(coef), 1]
+      t_value <- coef[nrow(coef), 3]
+      
       return(c(
         feat1 = feat_name_x,
         feat2 = feat_name_y,
         effect_size = effect_size,
         p_value = p_value,
         t_value = t_value,
-        N_Samples = N_Samples
+        N_Samples = N_Samples,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse="")
       ))
     },
     error = function(e) {
@@ -580,7 +587,8 @@ f_lm_cont <- function(x, y, meta, feat_name_x, feat_name_y) {
         effect_size = NA,
         p_value = NA,
         t_value = NA,
-        N_Samples = N_Samples
+        N_Samples = N_Samples,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse="")
       ))
     }
   )
