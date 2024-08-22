@@ -728,8 +728,9 @@ cluster_rows = F,cluster_columns = F) {
     col_split <- ifelse(div_measures, rep(c("A"),ncol(hmap_mat)), rep(c("B"),ncol(hmap_mat)))
   } else {
     col_split <- rep(c("A"),ncol(hmap_mat))
-  }  
-
+  }
+  col_split_levels <- unique(col_split) %>% sort() %>% rev()
+  col_split <- factor(col_split, levels = col_split_levels)
 
   max_val <- max(round(abs(range(hmap_mat, na.rm = T))))
   col_range <- c(-max_val, 0, max_val)
