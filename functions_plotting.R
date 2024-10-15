@@ -34,17 +34,32 @@ theme_paper <- ggembl::theme_presentation() +
 
 leg_inside <-
     theme(
-        legend.title = element_blank(),
+        #legend.title = element_blank(),
         legend.position = c(-0, 0),
         # legend.background = element_rect(color = "black", size = 0.5),
         legend.justification = c(0, 0),
         legend.margin = margin(6, 6, 6, 6))
+
+leg_inside_tl <-
+    theme(
+        #legend.title = element_blank(),
+        legend.position = c(-0, 1),
+        # legend.background = element_rect(color = "black", size = 0.5),
+        legend.justification = c(0, 1),
+        legend.margin = margin(6, 6, 6, 6))
 leg_inside_tr <-
     theme(
-        legend.title = element_blank(),
+        #legend.title = element_blank(),
         legend.position = c(1, 1),
         # legend.background = element_rect(color = "black", size = 0.5),
         legend.justification = c(1, 1),
+        legend.margin = margin(6, 6, 6, 6))
+leg_inside_br <-
+    theme(
+        #legend.title = element_blank(),
+        legend.position = c(1, 0),
+        # legend.background = element_rect(color = "black", size = 0.5),
+        legend.justification = c(1, 0),
         legend.margin = margin(6, 6, 6, 6))
 
 f_create_label  <- function(name_vec){
@@ -340,13 +355,13 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
     guides(
       color = "none",
       size = guide_legend(order = 1, reverse = T),
-      fill = guide_legend(order = 2, override.aes = list(size = 3.5))
+      fill = guide_legend(order = 2, override.aes = list(size = 2.5))
     ) +
     scale_x_continuous(breaks = xBreaks, labels = xBreaks, limits = xLims) +
     scale_y_continuous(breaks = man_y_breaks, labels = man_y_labs, name = yName, position = "left", limits = man_y_lims) +
     xlab("Enrichment effect size") + 
-    annotate("text", x = xLims[1], y = -Inf, label = paste0(group1," (N=",N_group1,")"), hjust = -0.01, vjust = -0.75, fontface = "bold") +
-    annotate("text", x = xLims[2], y = -Inf, label = paste0(group2," (N=",N_group2,")"), hjust = 0.99, vjust = -0.75, fontface = "bold")
+    annotate("text", x = xLims[1], y = -Inf, label = paste0(group1," (N=",N_group1,")"), hjust = -0.01, vjust = -0.75, fontface = "bold",size = 3) +
+    annotate("text", x = xLims[2], y = -Inf, label = paste0(group2," (N=",N_group2,")"), hjust = 0.99, vjust = -0.75, fontface = "bold",size = 3)
   
   return(pt_res)
 }
