@@ -740,11 +740,12 @@ f_run_fisher_test_parallel <- function(
     n_cores_to_use <- num_cores-2
   }
   print(paste("Creating cluster with: ", n_cores_to_use))
+  
   cl <- makeCluster(n_cores_to_use)
   
   # Export variables and load libraries to the cluster
   # Export variables and load libraries to the cluster
-  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","formula","meta","f_glm","lev_1_categories","lev_2_categories","tasks"),envir=environment())
+  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","formula","meta","f_glm","f_glmer","lev_1_categories","lev_2_categories","tasks"),envir=environment())
   clusterEvalQ(cl=cl, library(lmerTest))
   #message(colnames(meta))
   # Run tasks in parallel and track progress
@@ -753,6 +754,8 @@ f_run_fisher_test_parallel <- function(
       tasks[idx, "i"],
       tasks[idx, "j"],
       mat1, mat2,
+      meta = meta,
+      formula = formula,
       threshold_for_prev = threshold_for_prev,
       prevalence_threshold = prevalence_threshold
     )
@@ -852,10 +855,21 @@ f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,preval
     proportion_group2 <- sum(x_binary == group_levels[2] & y_binarized == 1) / sum(x_binary == group_levels[2])
 
 
-
     # Perform logistic regression with binomial models (to account for random or fixed effects)        
-    log_res_df <- f_glm(x = x_binary, y = y_binarized, meta = meta, formula = formula)
+    # Check if provided formula contains random effects
+    if (!is.null(formula)) {
+      contains_rand_effect <- grepl(paste(deparse(formula, width.cutoff = 500), collapse = ""),pattern = "\\|")
+    }else{
+      contains_rand_effect <- FALSE
+    }
 
+    if(contains_rand_effect){
+      log_res_df <- f_glmer(x = x_binary, y = y_binarized, meta = meta, formula = formula)
+
+    }else{
+      log_res_df <- f_glm(x = x_binary, y = y_binarized, meta = meta, formula = formula)
+    }
+    
     # Return a data frame with the results
     tmp_df <- data.frame(
       feat1_group = feat1, # add feat1_group (e.g. Child_Pugh_Score) to have grouping of categorical variables for p-value correction
@@ -880,7 +894,80 @@ f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,preval
   return(do.call(rbind, tmp_df_list))
 }
 
-f_glm <- function(x, y, formula = NULL, feat_name_x, feat_name_y, meta = NULL) {
+f_glmer <- function(x, y, formula, meta) {
+  #* Wrapper for lme4::glmer function ----
+  # fits binomial model with random effects
+
+  # # check whether meta contains all variables defined in the formula
+  # formula_variables <- paste(deparse(formula, width.cutoff = 500))
+  # # extract variables from formula
+  # formula_variables <- str_extract_all(formula_variables, "\\b\\w+\\b")[[1]]
+  # formula_variables <- formula_variables[formula_variables != "1"]
+  #stopifnot(all(formula_variables %in% colnames(meta)))
+
+  dat_df <- as.data.frame(cbind(x, y))
+  df_merged <- merge(meta, dat_df, by = "row.names", all.x = F)
+  df_merged$y <- as.numeric(df_merged$y)
+
+  # Define which level of x to take as reference
+  x_levels <- sort(as.character(na.omit((unique(dat_df$x)))))
+  if (any(x_levels %in% lev_1_categories)) {
+    lev1 <- x_levels[x_levels %in% lev_1_categories]
+    lev2 <- x_levels[!(x_levels %in% lev_1_categories)]
+  } else if (any(x_levels %in% lev_2_categories)) {
+    lev2 <- x_levels[x_levels %in% lev_2_categories]
+    lev1 <- x_levels[!(x_levels %in% lev_2_categories)]
+  } else {
+    lev1 <- x_levels[1]
+    lev2 <- x_levels[2]
+  }
+  if (any(c(length(lev1) == 0, length(lev2) == 0))) { # If all x-levels are in the same category, just keep the default order
+    lev1 <- x_levels[1]
+    lev2 <- x_levels[2]
+  }
+
+  df_merged$x <- factor(df_merged$x, levels = c(lev2, lev1))
+
+  tryCatch(
+    {
+      res <- lme4::glmer(
+        formula,
+        family = binomial(),
+        data = df_merged,
+      )
+      coef <- coefficients(summary(res))
+      p_value <- coef[nrow(coef),4]
+      effect_size <- coef[nrow(coef),1]
+      odds_ratio <- exp(effect_size)
+      return(c( # feat1 = paste0(feat_name_x,"_",lev1),
+        # feat2 = feat_name_y,
+        Group1 = lev2,
+        Group2 = lev1,
+        # effect_size = effect_size,
+        # lower95CI = lower95CI,
+        # upper95CI = upper95CI,
+        p.val_glm = p_value,
+        odds_ratio_glm = odds_ratio,
+        # N_Group1 = N_group1,
+        # N_Group2 = N_group2,
+        # Prev_Group1 = Prev_group1,
+        # Prev_Group2 = Prev_group2,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse = "")
+      ))
+    },
+    error = function(e) {
+      return(c(
+        Group1 = lev2,
+        Group2 = lev1,
+        p.val_glm = NA,
+        odds_ratio_glm = NA,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse = "")
+      ))
+    }
+  )
+}
+
+f_glm <- function(x, y, formula = NULL, meta = NULL) {
   #* Wrapper for the glm function for binary comparisons; (analogous to fisher tests)
   #performs binomial family glm (with categorical data) ----
 
