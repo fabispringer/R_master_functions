@@ -721,7 +721,7 @@ f_lmer_cont <- function(x, y, meta, formula, feat_name_x, feat_name_y) {
 
 f_run_fisher_test_parallel <- function(
   #* Parallelizing function to perform Fisher's exact tests in parallel for each combination of rows in mat1 and mat2 
-  dset_name = "all", mat1, mat2,
+  dset_name = "all", mat1, mat2,meta=NULL,formula=NULL,
   threshold_for_prev = -3,prevalence_threshold = FALSE,
   n_cores_max = 10) {
   
@@ -744,7 +744,7 @@ f_run_fisher_test_parallel <- function(
   
   # Export variables and load libraries to the cluster
   # Export variables and load libraries to the cluster
-  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","lev_1_categories","lev_2_categories","tasks"),envir=environment())
+  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","formula","meta","f_glm","lev_1_categories","lev_2_categories","tasks"),envir=environment())
   clusterEvalQ(cl=cl, library(lmerTest))
   #message(colnames(meta))
   # Run tasks in parallel and track progress
@@ -773,21 +773,21 @@ f_run_fisher_test_parallel <- function(
       N_Group1 = as.numeric(N_Group1),
       N_Group2 = as.numeric(N_Group2),
       Prev_Group1 = as.numeric(Prev_Group1),
-      Prev_Group2 = as.numeric(Prev_Group2)
+      Prev_Group2 = as.numeric(Prev_Group2),      
     ) %>%
     arrange(p.val_fisher) %>%
-    relocate(feat1) %>% 
+    relocate(feat1) %>%     
     as_tibble()
   
   return(fisher_res_df)
 }  
 
-f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,prevalence_threshold) {
+f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,prevalence_threshold, meta = NULL,formula = NULL) {
   #* This function is called by f_run_fisher_test_parallel with a specific combination of rows in matrix1 and matrix2.
   feat1 <- rownames(mat1)[i]
   feat2 <- rownames(mat2)[j]
-  x <- mat1[i, ]  # Binary variable
-  y <- mat2[j, ]  # Continuous variable
+  x <- mat1[i, ]
+  y <- mat2[j, ]
 
   # remove NA samples for current clinical test
   idx <- which(!(is.na(x)) & !(is.na(y)))
@@ -851,6 +851,11 @@ f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,preval
     proportion_group1 <- sum(x_binary== group_levels[1] & y_binarized == 1) / sum(x_binary == group_levels[1])
     proportion_group2 <- sum(x_binary == group_levels[2] & y_binarized == 1) / sum(x_binary == group_levels[2])
 
+
+
+    # Perform logistic regression with binomial models (to account for random or fixed effects)        
+    log_res_df <- f_glm(x = x_binary, y = y_binarized, meta = meta, formula = formula)
+
     # Return a data frame with the results
     tmp_df <- data.frame(
       feat1_group = feat1, # add feat1_group (e.g. Child_Pugh_Score) to have grouping of categorical variables for p-value correction
@@ -859,17 +864,102 @@ f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,preval
       Group1 = group_levels[1],
       Group2 = group_levels[2],
       p.val_fisher = fisher_test_result$p.value,
-      odds_ratio = fisher_test_result$estimate,      
+      odds_ratio = fisher_test_result$estimate,
+      p.val_glm = as.numeric(log_res_df["p.val_glm"]), # add from glm 
+      odds_ratio_glm = as.numeric(log_res_df["odds_ratio_glm"]),
+      formula = log_res_df["formula"],
       N_Group1 = sum(x == group_levels[1]),
       N_Group2 = sum(x == group_levels[2]),
       Prev_Group1 = proportion_group1,
-      Prev_Group2 = proportion_group2)    
-    tmp_df_list[[c]] <- tmp_df      
+      Prev_Group2 = proportion_group2)
+            
+    tmp_df_list[[c]] <- tmp_df
   }  
   
 
   return(do.call(rbind, tmp_df_list))
 }
+
+f_glm <- function(x, y, formula = NULL, feat_name_x, feat_name_y, meta = NULL) {
+  #* Wrapper for the glm function for binary comparisons; (analogous to fisher tests)
+  #performs binomial family glm (with categorical data) ----
+
+  if (is.null(meta)) {
+    # if no meta is given, create a dummy meta data frame
+    meta <- data.frame(Sample_ID = names(x))
+    rownames(meta) <- meta$Sample_ID
+  }
+  if (is.null(formula)) {
+    formula <- as.formula(paste0("y ~ x"))
+  }
+
+  dat_df <- as.data.frame(cbind(x, y))
+  df_merged <- merge(meta, dat_df, by = "row.names", all.x = F)
+  df_merged$y <- as.numeric(df_merged$y)
+
+  # Define which level of x to take as reference
+  x_levels <- sort(as.character(na.omit((unique(dat_df$x)))))
+  if (any(x_levels %in% lev_1_categories)) {
+    lev1 <- x_levels[x_levels %in% lev_1_categories]
+    lev2 <- x_levels[!(x_levels %in% lev_1_categories)]
+  } else if (any(x_levels %in% lev_2_categories)) {
+    lev2 <- x_levels[x_levels %in% lev_2_categories]
+    lev1 <- x_levels[!(x_levels %in% lev_2_categories)]
+  } else {
+    lev1 <- x_levels[1]
+    lev2 <- x_levels[2]
+  }
+  if (any(c(length(lev1) == 0, length(lev2) == 0))) { # If all x-levels are in the same category, just keep the default order
+    lev1 <- x_levels[1]
+    lev2 <- x_levels[2]
+  }
+
+  df_merged$x <- factor(df_merged$x, levels = c(lev2, lev1))
+
+  tryCatch(
+    {
+      res <- glm(
+        formula,
+        family = binomial(),
+        data = df_merged,
+      )
+      coef <- coefficients(summary(res))
+      p_value <- coef[nrow(coef), 4]
+      effect_size <- coef[nrow(coef), 1]
+      odds_ratio <- exp(effect_size)
+      return(c( # feat1 = paste0(feat_name_x,"_",lev1),
+        # feat2 = feat_name_y,
+        Group1 = lev2,
+        Group2 = lev1,
+        # effect_size = effect_size,
+        # lower95CI = lower95CI,
+        # upper95CI = upper95CI,
+        p.val_glm = p_value,
+        odds_ratio_glm = odds_ratio,
+        # N_Group1 = N_group1,
+        # N_Group2 = N_group2,
+        # Prev_Group1 = Prev_group1,
+        # Prev_Group2 = Prev_group2,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse = "")
+      ))
+    },
+    error = function(e) {
+      return(c(
+        Group1 = lev2,
+        Group2 = lev1,
+        p.val_glm = NA,
+        odds_ratio_glm = NA,
+        formula = paste(deparse(formula, width.cutoff = 500), collapse = "")
+      ))
+    }
+  )
+}
+
+
+
+
+
+
 
 f_run_spearman <- function(dset_name = "all",mat1,mat2,prevalence_threshold = FALSE,threshold_for_prev = -3){
   #* Accepts two matrices (mat1, mat2) and runs spearman correlations in parallel for each combination of rows in mat1 and mat2.
