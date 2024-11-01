@@ -9,7 +9,7 @@ require(progress)
 # Define which categories will be considered as first/second labels.
 # lev_2_categories are considered as baseline in the testing functions
 lev_1_categories <- c("male", "1","N1","M1","L1","high", "multinodular", "Inflamed", "present", "Tumor", "viral_HCC", "ALD/ASH_HCC", "HBV_HCC","yes","responder","iCCA","CRLM","Fuso+","Prev+","Trep+","Campy+","Bacteroideae+")
-lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non-tumor_HCC","Adj. non-tumor","EarlyFib","LateFib","0","Healthy","Normal","Bact-")
+lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non-tumor_HCC","Adj. non-tumor","EarlyFib","LateFib","0","Healthy","Normal","Bact-","other")
 
 
 f_run_linear_models_parallel <- function(
@@ -744,7 +744,7 @@ f_run_fisher_test_parallel <- function(
   
   # Export variables and load libraries to the cluster
   # Export variables and load libraries to the cluster
-  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","tasks"),envir=environment())
+  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","lev_1_categories","lev_2_categories","tasks"),envir=environment())
   clusterEvalQ(cl=cl, library(lmerTest))
   #message(colnames(meta))
   # Run tasks in parallel and track progress
@@ -1057,3 +1057,15 @@ f_save_to_excel <- function(res_list,out_name,column_groups=list(group1 = 5:9, g
   saveWorkbook(wb, out_name, overwrite = TRUE)
 }
 
+f_eplained_var_variable <- function(dat,meta,variable){
+  #Calculates the explained variation of the data by the selected variable (in comparison to total variance)
+  ss.res <- apply(dat, 1, FUN=function(x, label){
+    rank.x <- rank(x)/length(x)
+    ss.tot <- sum((rank.x - mean(rank.x))^2)/length(rank.x)
+    ss.o.i <- sum(vapply(unique(label), function(l){
+      sum((rank.x[label==l] - mean(rank.x[label==l]))^2)
+    }, FUN.VALUE = double(1)))/length(rank.x)
+    return(1-ss.o.i/ss.tot)
+  }, label=meta %>% pull(variable))
+  return(ss.res)
+}
