@@ -721,7 +721,7 @@ f_lmer_cont <- function(x, y, meta, formula, feat_name_x, feat_name_y) {
 
 f_run_fisher_test_parallel <- function(
   #* Parallelizing function to perform Fisher's exact tests in parallel for each combination of rows in mat1 and mat2 
-  dset_name = "all", mat1, mat2,meta=NULL,formula=NULL,
+  dset_name = "all", mat1, mat2,run_GLM=FALSE,meta=NULL,formula=NULL,
   threshold_for_prev = -3,prevalence_threshold = FALSE,
   n_cores_max = 10) {
   
@@ -745,7 +745,7 @@ f_run_fisher_test_parallel <- function(
   
   # Export variables and load libraries to the cluster
   # Export variables and load libraries to the cluster
-  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","formula","meta","f_glm","f_glmer","lev_1_categories","lev_2_categories","tasks"),envir=environment())
+  clusterExport(cl=cl, varlist = c("mat1", "mat2","threshold_for_prev","prevalence_threshold","f_single_run_fisher_test","formula","meta","run_GLM","f_glm","f_glmer","lev_1_categories","lev_2_categories","tasks"),envir=environment())
   clusterEvalQ(cl=cl, library(lmerTest))
   #message(colnames(meta))
   # Run tasks in parallel and track progress
@@ -785,7 +785,7 @@ f_run_fisher_test_parallel <- function(
   return(fisher_res_df)
 }  
 
-f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,prevalence_threshold, meta = NULL,formula = NULL) {
+f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,prevalence_threshold, meta = NULL,formula = NULL, run_GLM = FALSE) {
   #* This function is called by f_run_fisher_test_parallel with a specific combination of rows in matrix1 and matrix2.
   feat1 <- rownames(mat1)[i]
   feat2 <- rownames(mat2)[j]
@@ -855,21 +855,24 @@ f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,preval
     proportion_group2 <- sum(x_binary == group_levels[2] & y_binarized == 1) / sum(x_binary == group_levels[2])
 
 
-    # Perform logistic regression with binomial models (to account for random or fixed effects)        
-    # Check if provided formula contains random effects
-    if (!is.null(formula)) {
-      contains_rand_effect <- grepl(paste(deparse(formula, width.cutoff = 500), collapse = ""),pattern = "\\|")
-    }else{
-      contains_rand_effect <- FALSE
+    if (isTRUE(run_GLM)) {
+      # Perform logistic regression with binomial models (to account for random or fixed effects)
+      # Check if provided formula contains random effects
+      if (!is.null(formula)) {
+        contains_rand_effect <- grepl(paste(deparse(formula, width.cutoff = 500), collapse = ""), pattern = "\\|")
+      } else {
+        contains_rand_effect <- FALSE
+      }
+
+      if (contains_rand_effect) {
+        log_res_df <- f_glmer(x = x_binary, y = y_binarized, meta = meta, formula = formula)
+      } else {
+        log_res_df <- f_glm(x = x_binary, y = y_binarized, meta = meta, formula = formula)
+      }
+    } else {
+      log_res_df <- c("p.val_glm" = 1, "odds_ratio_glm" = 0, "formula" = "No GLM performed")
     }
 
-    if(contains_rand_effect){
-      log_res_df <- f_glmer(x = x_binary, y = y_binarized, meta = meta, formula = formula)
-
-    }else{
-      log_res_df <- f_glm(x = x_binary, y = y_binarized, meta = meta, formula = formula)
-    }
-    
     # Return a data frame with the results
     tmp_df <- data.frame(
       feat1_group = feat1, # add feat1_group (e.g. Child_Pugh_Score) to have grouping of categorical variables for p-value correction
@@ -897,6 +900,7 @@ f_single_run_fisher_test <- function(i, j, mat1, mat2, threshold_for_prev,preval
 f_glmer <- function(x, y, formula, meta) {
   #* Wrapper for lme4::glmer function ----
   # fits binomial model with random effects
+  #https://stats.stackexchange.com/questions/254354/may-i-replace-fishers-exact-test-or-chi-squared-test-with-logistic-regression-a
 
   # # check whether meta contains all variables defined in the formula
   # formula_variables <- paste(deparse(formula, width.cutoff = 500))
@@ -969,6 +973,7 @@ f_glmer <- function(x, y, formula, meta) {
 
 f_glm <- function(x, y, formula = NULL, meta = NULL) {
   #* Wrapper for the glm function for binary comparisons; (analogous to fisher tests)
+  #https://stats.stackexchange.com/questions/254354/may-i-replace-fishers-exact-test-or-chi-squared-test-with-logistic-regression-a
   #performs binomial family glm (with categorical data) ----
 
   if (is.null(meta)) {
