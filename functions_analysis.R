@@ -757,7 +757,8 @@ f_run_fisher_test_parallel <- function(
       meta = meta,
       formula = formula,
       threshold_for_prev = threshold_for_prev,
-      prevalence_threshold = prevalence_threshold
+      prevalence_threshold = prevalence_threshold,
+      run_GLM = run_GLM
     )
   })
   
