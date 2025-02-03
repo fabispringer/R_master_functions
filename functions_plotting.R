@@ -551,9 +551,60 @@ f_rescale_effect_sizes <- function(mat) {
   scale_factor <- quantile(abs(na.omit(mat)), 0.95)
 
   # Ensure values lie within [-1, 1]
-  rescaled <- pmin(pmax(mat / scale_factor, -1), 1)
+  rescaled <- pmin(pmax(mat[,,drop=F] / scale_factor, -1), 1)
   return(rescaled)
 }
+f_rescale_by_featCat <- function(mat) {
+  # Applies rescale_effect_sizes function on bacterial features and shannon/richnes/tot bact reads seperatedly
+  
+  # Identify diversity/richness columns (modify if names differ)
+  diversity_cols <- grep("Shannon|Richness", colnames(mat), value = TRUE)
+  bacteria_cols <- setdiff(colnames(mat), diversity_cols)
+  
+  # Apply f_rescale_effect_sizes separately
+  if (length(diversity_cols) > 0) {
+    mat[, diversity_cols] <- f_rescale_effect_sizes(mat[, diversity_cols, drop = FALSE])
+  }
+  
+  if (length(bacteria_cols) > 0) {
+    mat[, bacteria_cols] <- f_rescale_effect_sizes(mat[, bacteria_cols, drop = FALSE])
+  }
+  
+  return(mat)
+}
+
+f_rescale_by_category_and_featCat <- function(mat) {
+  # Applies rescale_effect_sizes function on bacterial features and shannon/richnes/tot bact reads seperatedly
+  # Also does it seperately for every meta-category (e.g. age_group,CRC_type) etc
+
+
+  diversity_cols <- grep("Shannon|Richness", colnames(mat), value = TRUE)
+  bacteria_cols <- setdiff(colnames(mat), diversity_cols)
+  
+  # Unique categories (assuming row names represent categories)
+  categories <- unique(rownames(mat))
+  
+  # Initialize new matrix
+  rescaled_mat <- mat
+  
+  # Apply per-category rescaling
+  for (cat in categories) {
+    cat_rows <- which(rownames(mat) == cat)
+    
+    if (length(diversity_cols) > 0) {
+      rescaled_mat[cat_rows, diversity_cols] <- f_rescale_effect_sizes(mat[cat_rows, diversity_cols, drop = FALSE])
+    }
+    
+    if (length(bacteria_cols) > 0) {
+      rescaled_mat[cat_rows, bacteria_cols] <- f_rescale_effect_sizes(mat[cat_rows, bacteria_cols, drop = FALSE])
+    }
+  }
+  
+  return(rescaled_mat)
+}
+
+
+
 
 f_prepare_boxplot_plot_df <- function(tax,clin_feature,relAB_mat,meta_df){        
     # Takes metadata and rel. abundance matrix. 
@@ -718,7 +769,7 @@ f_plot_signif_matrix <- function(upper_tri_matrix, condition_levels = NULL) {
 }
 
 f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_threshold = 0.05,leg_title = NULL,
-cluster_rows = F,cluster_columns = F) {
+cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames = F) {
   # Generates a complex heatmap and indicates significant p-values and fdr-significant pvalues 
 
   require(ComplexHeatmap)
@@ -732,9 +783,21 @@ cluster_rows = F,cluster_columns = F) {
   if(is.null(leg_title)){
     leg_title <- "LegTitle"
   }  
-  hmap_mat <- hmap_mat[sort(rownames(hmap_mat)), ]
-  mat_p <- mat_p[rownames(hmap_mat),colnames(hmap_mat)]
-  mat_p_adj <- mat_p_adj[rownames(hmap_mat),colnames(hmap_mat)]
+
+  if(presorted_rownames){
+    rNames <- rownames(hmap_mat)    
+  }else{
+    rNames <- sort(rownames(hmap_mat))
+  }
+  if(presorted_colnames){
+    cNames <- colnames(hmap_mat)
+  }else{
+    cNames <- sort(colnames(hmap_mat))
+  }
+  
+  hmap_mat <- hmap_mat[rNames, cNames]
+  mat_p <- mat_p[rNames,cNames]
+  mat_p_adj <- mat_p_adj[rNames,cNames]
   
 
   # If shannon, richness or total bacteria in heatmap, introduce column splot
