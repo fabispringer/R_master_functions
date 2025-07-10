@@ -9,7 +9,7 @@ require(progress)
 # Define which categories will be considered as first/second labels.
 # lev_2_categories are considered as baseline in the testing functions
 lev_1_categories <- c("male", "1","N1","M1","L1","high", "multinodular", "Inflamed", "present", "Tumor", "viral_HCC", "ALD/ASH_HCC", "HBV_HCC","yes","responder","iCCA","CRLM","Fuso+","Prev+","Trep+","Campy+","Bacteroideae+")
-lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non-tumor_HCC","Adj. non-tumor","EarlyFib","LateFib","0","Healthy","Normal","Bact-","other")
+lev_2_categories <- c("all","Adj. non-tumor_CCC","Adj. non-tumor_CRLM","Adj. non-tumor_HCC","Adj. non-tumor","EarlyFib","LateFib","0","Healthy","Normal","Bact-","other","gesund","nein","<1.25")
 
 
 f_run_linear_models_parallel <- function(
