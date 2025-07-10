@@ -263,7 +263,7 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
   stopifnot(all(c("p.val_adj","effect.size","tax") %in% colnames(plot_df)))
 
   leg_text_size <- 8
-  yName <- "P-value (adj.)"
+  yName <- "-log10 q-value"
   pMethod <- "p.val_adj"
 
 
@@ -272,7 +272,8 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
     # For all except fibrosis
     man_y_breaks <- -log10(c(0.05,0.01,0.001,0.0001,0.00001))#,0.000001))    
   }  
-  man_y_labs <- signif(10^-man_y_breaks,1)
+  #man_y_labs <- signif(10^-man_y_breaks,1)
+  man_y_labs <- signif(man_y_breaks,1) # to show -log of 
   man_y_lims <- c(0,round(max(man_y_breaks+add_to_y_axis),1))
 
   # Check if supplied y-axis and x-axis limits are valid
@@ -351,7 +352,7 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
       legend.key.size = unit(0.75, "lines"),
       legend.justification = c(0, 1)
     ) +
-    labs(fill = paste0("P-adj. < ",fdr_thresh), size = "Prevalence") +
+    labs(fill = paste0("q < ",fdr_thresh), size = "Prevalence") +
     guides(
       color = "none",
       size = guide_legend(order = 1, reverse = T),
@@ -807,7 +808,7 @@ cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames =
   } else {
     col_split <- rep(c("A"),ncol(hmap_mat))
   }
-  col_split_levels <- unique(col_split) %>% sort() %>% rev()
+  col_split_levels <- unique(col_split) %>% sort()
   col_split <- factor(col_split, levels = col_split_levels)
 
   max_val <- max(round(abs(range(hmap_mat, na.rm = T))))
@@ -844,6 +845,7 @@ cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames =
     # Col split
     column_split = col_split,
     column_title=NULL,
+    cluster_column_slices = FALSE,  # prevents reordering of splits
     row_title=NULL,
     
 
