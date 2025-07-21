@@ -258,7 +258,7 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
   
   return(pt_res)
 }
-f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_breaks=NULL,clean_tax_names=FALSE,add_to_y_axis = 0.25){
+f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_breaks=NULL,clean_tax_names=FALSE,add_to_y_axis = 0.25,big_data_mode = FALSE,FC_thresh = 0){
   # Takes a dataframe with testing results and generates a volcano plot
   # equivalent to the volcano function but assumes p-adj. vales as input
 
@@ -293,6 +293,17 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
       plot_df <- plot_df %>% mutate(lab = tax)
   }
 
+  # Define alpha, size and shape of points
+  if(big_data_mode == TRUE) {
+    point_alpha <- 0.5
+    point_stroke  <- 0.1
+  } else {
+    point_alpha <- 0.75
+    point_stroke  <- 0.01
+  }
+
+
+
   # extract Group names, Group numbers
   group1 <- unique(plot_df$Group1)  
   group2 <- unique(plot_df$Group2)
@@ -304,8 +315,8 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
     mutate(
       enriched_in =
         case_when(
-          p.val_adj < fdr_thresh & effect.size > 0 ~ group2,
-          p.val_adj < fdr_thresh & effect.size < 0 ~ group1,
+          p.val_adj < fdr_thresh & effect.size > FC_thresh ~ group2,
+          p.val_adj < fdr_thresh & effect.size < -FC_thresh ~ group1,
           TRUE ~ "n.s."
         ),
       # Define whether a taxon is FDR significant or not
@@ -325,17 +336,18 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
     #geom_hline(yintercept = man_y_breaks[2:length(man_y_breaks) - 1], color = "grey", lty = "solid", lwd = 0.2) +
     geom_hline(yintercept = man_y_breaks[2:length(man_y_breaks)], color = "grey", lty = "solid", lwd = 0.2) +
     geom_hline(yintercept = -log10(fdr_thresh), color = "black", lty = "solid", lwd = 0.5) +    
-    geom_point(      
+    geom_point(
+      data = plot_df %>% filter(enriched_in != "n.s."),
       aes(
         size = group_prev,
         fill = enriched_in
       ),
-      shape = 21, color = "black", alpha = 0.75,stroke = 1
+      shape = 21, color = "black", alpha = point_alpha,stroke = point_stroke
     ) +
-    # add second geom point for unknown compounds
-    geom_point(data = plot_df %>% filter(tax == ".", p.val_adj < fdr_thresh),       
-      shape = 20, color = "black", size = 0.5
-    ) +
+    # # add second geom point for unknown compounds -> removed since lab should be controlled outside
+    # geom_point(data = plot_df %>% filter(tax == ".", p.val_adj < fdr_thresh),       
+    #   shape = 20, color = "black", size = 0.5
+    # ) +
 
     scale_size(range = c(2, 5), guide = guide_legend(reverse = TRUE)) + # Adjust this range as needed
     ggrepel::geom_text_repel(aes(label = lab, fontface = font),
@@ -366,6 +378,33 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
     annotate("text", x = xLims[1], y = -Inf, label = paste0(group1," (N=",N_group1,")"), hjust = -0.01, vjust = -0.75, fontface = "bold",size = 3) +
     annotate("text", x = xLims[2], y = -Inf, label = paste0(group2," (N=",N_group2,")"), hjust = 0.99, vjust = -0.75, fontface = "bold",size = 3)
   
+  # Add vlines if FC != 0
+  if(FC_thresh != 0) {
+    pt_res <- pt_res + 
+      geom_vline(xintercept = FC_thresh, color = "black", linetype = "dashed", size = 0.5) +
+      geom_vline(xintercept = -FC_thresh, color = "black", linetype = "dashed", size = 0.5)
+  }
+
+  # Add n.s. points - in big-data mode as grey circles without border
+  if (big_data_mode == TRUE) {
+    pt_res <- pt_res + geom_point(
+      data = plot_df %>% filter(enriched_in == "n.s."),
+      size = 2,      
+      shape = 19, color = "grey", fill = "lightgrey", alpha = point_alpha
+    )
+  } else {
+    # in normal mode as black circles with border
+    pt_res <- pt_res + geom_point(
+      data = plot_df %>% filter(enriched_in == "n.s."),
+      aes(
+        size = group_prev,
+        fill = "lightgrey"
+      ),
+      shape = 21, color = "black", alpha = point_alpha, stroke = point_stroke
+    )
+  }
+
+
   return(pt_res)
 }
 
