@@ -188,7 +188,9 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
 
   # extract Group names, Group numbers
   group1 <- unique(plot_df$Group1)
+  g1 <- group1
   group2 <- unique(plot_df$Group2)
+  g2 <- group2
   N_group1 <- unique(plot_df$N_Group1)
   N_group2 <- unique(plot_df$N_Group2)
 
@@ -205,7 +207,7 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
       fdr_sig = ifelse(p.val_adj < fdr_thresh, TRUE, FALSE),
     ) %>%
     mutate(
-      enriched_in = factor(enriched_in, levels = c(group1, group2, "n.s.")),
+      enriched_in = factor(enriched_in, levels = c(g1, g2, "n.s.")),
       font = ifelse(fdr_sig, "bold.italic", "italic"), # for labeling
       group_prev = ifelse(effect.size > 0, Prev_Group2, Prev_Group1), # size based on prevalence in group
       lab := case_when(!!as.symbol(pMethod) < 0.05 | p.val_adj < fdr_thresh ~ lab, TRUE ~ "")
@@ -273,7 +275,7 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
     man_y_breaks <- -log10(c(0.05,0.01,0.001,0.0001,0.00001))#,0.000001))    
   }  
   #man_y_labs <- signif(10^-man_y_breaks,1)
-  man_y_labs <- signif(man_y_breaks,1) # to show -log of 
+  man_y_labs <- man_y_breaks # to show -log of 
   man_y_lims <- c(0,round(max(man_y_breaks+add_to_y_axis),1))
 
   # Check if supplied y-axis and x-axis limits are valid
@@ -292,7 +294,7 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
   }
 
   # extract Group names, Group numbers
-  group1 <- unique(plot_df$Group1)
+  group1 <- unique(plot_df$Group1)  
   group2 <- unique(plot_df$Group2)
   N_group1 <- unique(plot_df$N_Group1)
   N_group2 <- unique(plot_df$N_Group2)
