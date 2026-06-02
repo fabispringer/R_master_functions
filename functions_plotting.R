@@ -276,6 +276,8 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
   }  
   #man_y_labs <- signif(10^-man_y_breaks,1)
   man_y_labs <- man_y_breaks # to show -log of 
+  
+
   man_y_lims <- c(0,round(max(man_y_breaks+add_to_y_axis),1))
 
   # Check if supplied y-axis and x-axis limits are valid
@@ -299,7 +301,7 @@ f_plot_volcano_fdr <- function(plot_df,xBreaks,xLims,fdr_thresh=0.05,man_y_break
     point_stroke  <- 0.1
   } else {
     point_alpha <- 0.75
-    point_stroke  <- 0.01
+    point_stroke  <- 1
   }
 
 
@@ -811,7 +813,8 @@ f_plot_signif_matrix <- function(upper_tri_matrix, condition_levels = NULL) {
 }
 
 f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_threshold = 0.05,leg_title = NULL,
-cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames = F) {
+cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames = F,column_names_rot = 45,
+show_row_dend = F, show_column_dend = F) {
   # Generates a complex heatmap and indicates significant p-values and fdr-significant pvalues 
 
   require(ComplexHeatmap)
@@ -843,7 +846,7 @@ cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames =
   
 
   # If shannon, richness or total bacteria in heatmap, introduce column splot
-  div_measures <- str_detect(colnames(hmap_mat), "annon|ichness|otal")
+  div_measures <- str_detect(colnames(hmap_mat), "annon|ichness|Total|total")
   if(any(div_measures)){
     col_split <- ifelse(div_measures, rep(c("A"),ncol(hmap_mat)), rep(c("B"),ncol(hmap_mat)))
   } else {
@@ -877,8 +880,9 @@ cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames =
     #  top_annotation = bar_anno,
     cluster_rows = cluster_rows,
     cluster_columns = cluster_columns,
-    show_row_dend = F,
-    show_column_dend = F,
+    show_row_dend = show_row_dend,
+    show_column_dend = show_column_dend,
+    column_dend_side = "top",
     col = color_mapping,
     column_labels = colLabs,    
     row_labels = rowLabs,
@@ -890,7 +894,7 @@ cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames =
     row_title=NULL,
     
 
-    column_names_rot = 45, column_names_side = "bottom",
+    column_names_rot = column_names_rot, column_names_side = "bottom",
     show_column_names = T,
     row_names_gp = gpar(fontsize = 6),
     row_names_side = c("left"),
