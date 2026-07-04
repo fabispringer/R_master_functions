@@ -220,6 +220,8 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
     geom_hline(yintercept = man_y_breaks[2:length(man_y_breaks)], color = "grey", lty = "solid", lwd = 0.2) +
     geom_hline(yintercept = -log10(0.05), color = "black", lty = "solid", lwd = 0.5) +
     geom_hline(yintercept = -log10(q_value_threshold), color = "darkgrey", lty = "dashed", lwd = 0.75) +
+    # add geom_text to indicate q-value threshold
+    annotate("text", x = xLims[1], y = -log10(q_value_threshold), label = paste0("q < ",fdr_thresh), hjust = -0.01, vjust = -0.75, fontface = "bold",size = 3,color = "darkgrey") +
     geom_point(
       aes(
         size = group_prev,
