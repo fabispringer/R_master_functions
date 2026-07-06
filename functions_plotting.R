@@ -1014,6 +1014,311 @@ GeomSplitTile <- ggproto(
 scale_split <- function(..., scale_name="scale_direction", palette = function(n) if(n>2) error(paste0(scale_name, " can handle at most 2 levels")) else c(FALSE, TRUE)) discrete_scale(aesthetics = "split", scale_name=scale_name, palette = palette, ... )
 
 
+f_barplot_topN_relAB_bySample <- function(counts.list,
+                                          meta.list,
+                                          x="Sample_ID",
+                                          wrap_by="list.names",
+                                          topN=15,
+                                          prop.label=TRUE,
+                                          prop.label.color="black",
+                                          bacSel_df=NULL,
+                                          bact.counts=TRUE,
+                                          rel.counts.input=FALSE,
+                                          tax.level="genus"){
+  #takes list of raw counts, computes relative abundances and extracts bacterial counts
+  #plots barplot of top_N genera by overall relative abundance
+  #accepts selection of bacteria (bac.sel) that will be plotted (independent of their rel. abundance)
+  #tax.level is needed for matching with the provided gtdb taxonmy df in order to create the hsv color labels
+  
+  #stopifnot(c("Sample_ID","Method")%in%colnames(meta))
+  stopifnot(!(is.null(names(counts.list))))
+  #stopifnot(any(names(meta.list) %in% names(counts.list)))
+  stopifnot(names(meta.list) == names(counts.list))
+  
+  ### From the raw_counts list, compute relative counts and select bacterial reads ###
+  if(!isTRUE(rel.counts.input)){
+    counts.rel.list <- list()
+    bact.counts.df <- tibble(list.names=character(),Sample_ID=character(),bact.counts=double())
+    for(i in seq(1,length(counts.list))){
+      c.counts <- counts.list[[i]]
+      c.counts.rel <- prop.table(c.counts[!(rownames(c.counts)=="Bacteria"),,drop=FALSE],2) 
+      counts.rel.list[[i]] <- c.counts.rel
+      names(counts.rel.list)[[i]] <- names(counts.list)[i]
+      #add bacterial counts to tibble
+      if("Bacteria"%in%rownames(c.counts)){
+        bact.counts.df <- 
+          bind_rows(bact.counts.df,
+                    c.counts %>% 
+                      as_tibble(rownames = "bac") %>% 
+                      gather(-bac,key = "Sample_ID",value = "bact.counts") %>% 
+                      filter(bac == "Bacteria") %>% 
+                      select(-bac) %>% 
+                      add_column(list.names=names(counts.list)[i]))
+      }else{
+        bact.counts <- "FALSE"
+      }
+    }  
+  }else{
+    counts.rel.list <- counts.list
+  }
+  
+  #gather relative abundances from individual list elements into one dataframe for plotting
+  res.df <- tibble()
+  for(i in seq(1,length(counts.rel.list))){
+    c.df <- as_tibble(counts.rel.list[[i]][,colnames(counts.rel.list[[i]])%in%meta.list[[i]]$Sample_ID,drop=F],rownames="bacteria") %>% 
+      gather(key = "Sample_ID",value = "rel.count",-bacteria) %>% 
+      #inner_join(.,meta %>% filter(Method == names(counts.list)[i]),by="Sample_ID") %>% 
+      add_column(list.names = names(counts.rel.list)[i])
+    res.df <- bind_rows(res.df,c.df)
+  }  
+  res.df
+  
+  #create meta.df by combining the supplied meta.lists
+  meta.df <- bind_rows(meta.list,.id = "list.names")
+  
+  
+  #select topN bacteria for plotting
+  if(is.null(bacSel_df)){
+    #Get top10 bacs by abundance over all tools
+    bac.sel <- res.df %>% 
+      group_by(bacteria) %>% 
+      summarise(mean.rel.count = mean(rel.count)) %>% 
+      arrange(desc(mean.rel.count)) %>% 
+      top_n(.,n = topN,wt = mean.rel.count) %>% 
+      pull(bacteria)
+    
+    plot.df <- res.df %>% 
+      filter(bacteria %in% as.character(bac.sel) | bacteria == "not_resolved")
+  }else{plot.df <- 
+    res.df %>% 
+    filter(bacteria %in% (bacSel_df %>% 
+                             filter(bacteria != "other") %>% 
+                             pull(bacteria) %>% as.character()))}
+    
 
+  ###Fix: "Other" does not get matched to the metadata!!!  
+  plot.df <- 
+    plot.df %>% 
+    group_by(Sample_ID,list.names) %>% 
+    summarise(sum = sum(rel.count)) %>% 
+    mutate(rel.count = 1-sum) %>% 
+    add_column(bacteria = "other") %>% 
+    select(Sample_ID,list.names,rel.count,bacteria) %>% 
+    bind_rows(plot.df,.) %>%
+    inner_join(.,meta.df,by=c("Sample_ID","list.names")) %>% 
+    mutate(Sample_ID = as.factor(Sample_ID))
+  
+  if(!(isFALSE(bact.counts))){
+    plot.df <- 
+      plot.df %>% 
+      left_join(.,bact.counts.df)
+  }
+  
 
+  if(is.null(bacSel_df)){
+    #Calculate relative abundance by phylum and arrange by phylum
+    byPhylum.df <-  
+      plot.df %>% select(bacteria,rel.count) %>% 
+      #left_join(gtdb_tax.df %>% select(phylum,!!as.symbol(tax.level)) %>% rename(bacteria = !!as.symbol(tax.level))) %>% 
+      left_join(.,ncbi_tax_df %>% dplyr::select(phylum,!!as.symbol(tax.level)) %>% dplyr::rename(bacteria = !!as.symbol(tax.level)) %>% distinct()) %>% 
+      mutate(!!as.symbol(tax.level) := bacteria) %>% #in case "phylum" is the current tax level
+      relocate(phylum) %>% 
+      group_by(phylum) %>% 
+      mutate(phylum.rel.mean = mean(rel.count)) %>% 
+      group_by(phylum,bacteria) %>% 
+      mutate(phylum_bac.mean = mean(rel.count)) %>% 
+      arrange(phylum.rel.mean,phylum_bac.mean) %>% 
+      select(-rel.count) %>% 
+      distinct() %>% 
+      filter(!(bacteria %in% c("other","not_resolved")))
+    byPhylum.df
+    
+    hsv_df <- f_create_hsv_colors(phylum_info_df = byPhylum.df)
+    
+    plot.df <- plot.df %>% left_join(.,hsv_df) %>% 
+      relocate(hsv_color,phylum,bacteria) %>% 
+      mutate(hsv_color = case_when(bacteria == "other"~"#F2F3F4",
+                                   bacteria == "not_resolved"~"#DBD7D7",#A8A99E
+                                   TRUE~hsv_color))
+    
+    #generate lavels for correct representation of phyla by abundance
+    plot.df <- plot.df %>% mutate(bacteria = factor(bacteria, levels = c("not_resolved","other",hsv_df$bacteria)))
+    
+    #create named color vector and reorder the entries according to the levels of bacteria
+    
+    col_vec <- deframe(plot.df %>% select(bacteria,hsv_color) %>% distinct())
+    col_vec <- col_vec[match(levels(plot.df$bacteria),names(col_vec))]}
+  else{
+    #if bacSelDF is provided: simply take provided factor levels and hsv_colors
+    plot.df <- plot.df %>% left_join(.,bacSel_df) %>% 
+      mutate(bacteria = factor(bacteria,levels = levels(bacSel_df$bacteria)))
+    
+    col_vec <- deframe(bacSel_df %>% select(bacteria,hsv_color))
+    col_vec <- col_vec[match(levels(plot.df$bacteria),names(col_vec))]
+  }
+  
+  c.plot <- plot.df %>% 
+    ggplot(aes(x = !!as.symbol(x),y = rel.count*100,fill=bacteria))+
+    geom_bar(stat="identity",position = "stack")+
+    scale_y_continuous(limits = c(0,105),breaks = seq(0,105,10))+
+    scale_fill_manual(values=col_vec,limits=force)+
+    ggembl::theme_presentation()+
+    theme(panel.spacing.x = unit(0, "lines"),
+          axis.text.x = element_text(angle = 45,hjust = 0.99))+
+    {if(isTRUE(prop.label))geom_text(aes(label = ifelse(rel.count > 0.02, round(rel.count*100,0), "")),
+                                     size = 3, position = position_stack(vjust = 0.5),color=prop.label.color)}+
+    ylab("Relative abundance [%]")+
+    labs(fill=tax.level)
+  c.plot
+  #Add bacterial counts
+  if(isTRUE(bact.counts)){
+    c.plot <- 
+      c.plot+
+      geom_text(data = plot.df %>% select(!!as.symbol(x),!!as.symbol(wrap_by),list.names,bact.counts) %>% distinct(),
+                aes(x = !!as.symbol(x),
+                    #label = numform::f_thous(bact.counts,digits = -2), #1000 is written as 1K
+                    #label = round(bact.counts,1),
+                    label = formatC(bact.counts, format="f", big.mark=",", digits=0),
+                    y = 101,
+                    fill = NULL),size = 3,angle=90,vjust=0.5,hjust=0)
+  }
+  
+  
+  #Create facet grid when wrap_by is selected and/or length(unique(Method>0) and not selected as x-ticks)
+  list.names.wrap <- (length(unique(plot.df$list.names))>1 & x!="list.names")
+  wrap_by.wrap <- !(wrap_by=="list.names")
+  if(list.names.wrap & wrap_by.wrap){
+    c.plot <- 
+      c.plot+facet_grid(as.formula(paste("list.names","~",wrap_by)),scales = "free_x", space = "free")
+  }else if(list.names.wrap){
+    c.plot <- 
+      c.plot+facet_grid(.~list.names,scales = "free_x", space = "free")
+  }else if(wrap_by.wrap){
+    c.plot <- 
+      c.plot+facet_grid(as.formula(paste(".~", wrap_by)),scales = "free_x", space = "free")
+      #c.plot+facet_grid(as.formula(paste(wrap_by,"~.")),scales = "free_x", space = "free")
+      #c.plot+facet_wrap(as.formula(paste0("~",wrap_by)))
+  }
+  c.plot
+  
+  
+  return(c.plot)
+}
 
+f_create_hsv_colors <- function(phylum_info_df){
+  #set.seed(420)
+  #define ranges for saturation and brightness
+  s.range <- c(0.2,0.8)
+  v.range <- c(0.5,1)
+  
+  stopifnot("phylum" %in% colnames(phylum_info_df))
+  
+  #predefine phylum hue values; saturation and value (brightness) get assigned randomly 
+  phylum_hue_values <- enframe(c("Fusobacteri*" = 1/360, ##FF0400
+                                 "Actino_*" = 180/360, ##00FFFF
+                                 "Bacteroidota" = 130/360,  ##00FF2B
+                                 "Bacteroidetes" = 130/360, ##00FF2B
+                                 
+                                 "Firmicutes_*" = 250/350, ##2B00FF
+                                 "Bacillota_*" = 250/350, ##2B00FF
+                                 
+
+                                 "Proteobacteria" = 301/360, ##FF00D5
+                                 "Pseudomonadota" = 301/360, ##FF00D5
+                                 "Campylobacterota" = 40/360 )) %>% ##FFAB00
+    rename(phylum = name,hue = value)
+  
+  #define h-range for all other phyla: 
+  #other.h_range <- c(95/360,120/360)
+  other.h_range <- c(50/360)
+  
+
+  hsv.df <- 
+    phylum_info_df %>% 
+    fuzzyjoin::regex_left_join(phylum_hue_values) %>% 
+    #group_by(phylum) %>% 
+    ungroup() %>% 
+    #group_by(phylum.x) %>% 
+    #mutate(n=n()) %>% 
+    # mutate(sat = runif(nrow(.),min = min(s.range),max = max(s.range)),
+    #        val = runif(nrow(.),min = min(v.range),max = max(v.range))) %>% 
+
+    # mutate(val = pracma::linspace(x1=max(v.range),x2 = min(v.range),n = as.numeric(n()))) %>% 
+    # ungroup() %>%          
+    mutate(sat = runif(nrow(.),min = min(s.range),max = max(s.range))) %>%     
+    rename(phylum = phylum.x) %>% 
+    select(-phylum.y) %>% 
+    as.data.frame()
+  
+  #relocate the "NA" phyla such that they are all grouped next to each other in the barplot
+  #witin each group, the phylum and bacteria are already ordered according to rel abundance
+  hsv.df <- 
+    hsv.df %>% 
+    filter(!(is.na(hue))) %>% 
+    bind_rows(hsv.df %>% filter(is.na(hue)),.)
+  hsv.df  
+  
+  #add random h values for NA phyla:
+  hsv.df$hue[is.na(hsv.df$hue)] <- runif(hsv.df %>% 
+                                           filter(is.na(hue)) %>% 
+                                           nrow(),
+                                         min = min(other.h_range),
+                                         max = max(other.h_range))
+  
+  #create v (brightness) values within every group of same hue-values (same phylum); create v as linspaced with highest abundant tax level as darkest
+  #define brighness values depending on number of representatives for each phylum
+  hsv.df <- 
+    hsv.df %>% 
+    group_by(hue) %>% 
+    mutate(n=n()) %>% 
+    ungroup()
+  hsv.df$val <- NA
+  for(i in unique(hsv.df$n)){
+    if(i == 1){
+      val_vec <- 0.75
+    }else if(i == 2){
+      val_vec <- c(0.75,0.5)
+    }else if(i > 5){
+      #create 1 vec from dark-> bright for all odd numbers
+      val_vec1 <- pracma::linspace(x1=max(v.range),x2 = min(v.range),n = sum(seq(1,i)%%2==1))
+      #create another vec with the even numbers in reverse order
+      val_vec2 <- pracma::linspace(x2=max(v.range),x1 = min(v.range),n = sum(seq(1,i)%%2==0))
+      val_vec <- rep(NA,i)
+      c1 <- 1
+      c2 <- 1
+      for(k in seq(1,i)){
+        if(k%%2==1){
+          #for uneven numbers, take from vector 1
+          val_vec[k] <- val_vec1[c1]
+          c1 <- c1+1
+        }else if(k%%2 == 0){
+          #for even numbers, take from vector 2
+          val_vec[k] <- val_vec2[c2]
+          c2 <- c2+1
+        }
+      }
+    }
+    else{
+      val_vec <- pracma::linspace(x1=max(v.range),x2 = min(v.range),n = i)
+    }
+    #Add to datafframe
+    hsv.df$val[hsv.df$n == i] <- val_vec
+  }
+  
+  
+  #create named vector of bacteria with HSV
+  col_vec <- c()
+  for(i in seq(1:nrow(hsv.df))){
+    col_vec[i] <- hsv(hsv.df[i,"hue"],hsv.df[i,"sat"],hsv.df[i,"val"])
+  }
+  hsv.df$hsv_color <- col_vec
+
+  # Edit 240416: In some very rare cases (e.g. motus phylum annotation: Bacteria phulum [Proteobacteria/Firmicutes]), the regex_join matches both, Proteobacteria and Firmicutes.
+  # To avoid duplicated HSV colors for this phylum manually remove the dublicated one (with warning)
+  export_df <- hsv.df %>% distinct(phylum,bacteria,.keep_all = T) %>% dplyr::select(phylum,bacteria,hsv_color)
+  if(nrow(export_df)<nrow(hsv.df)){
+    warning("Ambiguous phylum annotation for at least 1 provided tax. Duplicates have been removed.")
+  }
+
+  return(export_df)
+}
