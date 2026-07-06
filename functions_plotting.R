@@ -1016,6 +1016,7 @@ scale_split <- function(..., scale_name="scale_direction", palette = function(n)
 
 f_barplot_topN_relAB_bySample <- function(counts.list,
                                           meta.list,
+                                          taxonomy_df,
                                           x="Sample_ID",
                                           wrap_by="list.names",
                                           topN=15,
@@ -1030,6 +1031,12 @@ f_barplot_topN_relAB_bySample <- function(counts.list,
   #accepts selection of bacteria (bac.sel) that will be plotted (independent of their rel. abundance)
   #tax.level is needed for matching with the provided gtdb taxonmy df in order to create the hsv color labels
   
+  #taxonomy_df: dataframe with taxonomic information for the features in the counts.list (e.g. gtdb_taxonomy_df)
+  # must have at least a column phylum and tax.level
+  stopifnot(c("phylum",tax.level)%in%colnames(taxonomy_df))
+
+
+
   #stopifnot(c("Sample_ID","Method")%in%colnames(meta))
   stopifnot(!(is.null(names(counts.list))))
   #stopifnot(any(names(meta.list) %in% names(counts.list)))
@@ -1120,7 +1127,7 @@ f_barplot_topN_relAB_bySample <- function(counts.list,
     byPhylum.df <-  
       plot.df %>% select(bacteria,rel.count) %>% 
       #left_join(gtdb_tax.df %>% select(phylum,!!as.symbol(tax.level)) %>% rename(bacteria = !!as.symbol(tax.level))) %>% 
-      left_join(.,ncbi_tax_df %>% dplyr::select(phylum,!!as.symbol(tax.level)) %>% dplyr::rename(bacteria = !!as.symbol(tax.level)) %>% distinct()) %>% 
+      left_join(.,taxonomy_df %>% dplyr::select(phylum,!!as.symbol(tax.level)) %>% dplyr::rename(bacteria = !!as.symbol(tax.level)) %>% distinct()) %>% 
       mutate(!!as.symbol(tax.level) := bacteria) %>% #in case "phylum" is the current tax level
       relocate(phylum) %>% 
       group_by(phylum) %>% 
