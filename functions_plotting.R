@@ -848,7 +848,10 @@ show_row_dend = F, show_column_dend = F) {
   
 
   # If shannon, richness or total bacteria in heatmap, introduce column splot
-  div_measures <- str_detect(colnames(hmap_mat), "annon|ichness|Total|total")
+  div_measures <- str_detect(
+    colnames(hmap_mat),
+    "annon|ichness|crc_score|CRC classifier score|CRC score|Total|total"
+  )
   if(any(div_measures)){
     col_split <- ifelse(div_measures, rep(c("A"),ncol(hmap_mat)), rep(c("B"),ncol(hmap_mat)))
   } else {
