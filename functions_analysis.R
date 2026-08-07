@@ -37,14 +37,12 @@ f_run_linear_models_parallel <- function(
   tasks <- expand.grid(i = seq_len(nrow(mat1)), j = seq_len(nrow(mat2)))
 
   num_cores <- detectCores()
+  if (is.na(num_cores)) num_cores <- 1
   print(paste("Number of cores available: ", num_cores))
-  if(n_cores_max < num_cores-2){
-    n_cores_to_use <- n_cores_max
-  }else{
-    n_cores_to_use <- num_cores-2
-  }
+  n_cores_to_use <- max(1, min(n_cores_max, num_cores - 2))
   print(paste("Creating cluster with: ", n_cores_to_use))
   cl <- makeCluster(n_cores_to_use)
+  on.exit(stopCluster(cl), add = TRUE)
   
   # Export variables and load libraries to the cluster
   # Export variables and load libraries to the cluster
@@ -72,9 +70,6 @@ f_run_linear_models_parallel <- function(
       cont_or_cat_vec = cont_or_cat_vec
     )
   })
-  
-  # Stop the cluster
-  on.exit(stopCluster(cl))
   
   # Aggregate results
   lmem_res_df <- lapply(res_list, function(x) as.data.frame((x), stringsAsFactors = FALSE)) %>%
@@ -733,15 +728,13 @@ f_run_fisher_test_parallel <- function(
   tasks <- expand.grid(i = seq_len(nrow(mat1)), j = seq_len(nrow(mat2)))
 
   num_cores <- detectCores()
+  if (is.na(num_cores)) num_cores <- 1
   print(paste("Number of cores available: ", num_cores))
-  if(n_cores_max < num_cores-2){
-    n_cores_to_use <- n_cores_max
-  }else{
-    n_cores_to_use <- num_cores-2
-  }
+  n_cores_to_use <- max(1, min(n_cores_max, num_cores - 2))
   print(paste("Creating cluster with: ", n_cores_to_use))
   
   cl <- makeCluster(n_cores_to_use)
+  on.exit(stopCluster(cl), add = TRUE)
   
   # Export variables and load libraries to the cluster
   # Export variables and load libraries to the cluster
@@ -761,9 +754,6 @@ f_run_fisher_test_parallel <- function(
       run_GLM = run_GLM
     )
   })
-  
-  # Stop the cluster
-  stopCluster(cl)
   
   # Aggregation logic
   fisher_res_df <- do.call(rbind, res_list) %>% as.data.frame()
