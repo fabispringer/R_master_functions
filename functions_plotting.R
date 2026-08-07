@@ -816,7 +816,7 @@ f_plot_signif_matrix <- function(upper_tri_matrix, condition_levels = NULL) {
 
 f_simple_heatmap <- function(hmap_mat, mat_p, mat_p_adj, fdr_threshold = 0.2, p_threshold = 0.05,leg_title = NULL,
 cluster_rows = F,cluster_columns = F,presorted_rownames = F,presorted_colnames = F,column_names_rot = 45,
-show_row_dend = F, show_column_dend = F) {
+show_row_dend = F, show_column_dend = F, cell_size_mm = NULL) {
   # Generates a complex heatmap and indicates significant p-values and fdr-significant pvalues 
 
   require(ComplexHeatmap)
@@ -860,6 +860,17 @@ show_row_dend = F, show_column_dend = F) {
   col_split_levels <- unique(col_split) %>% sort()
   col_split <- factor(col_split, levels = col_split_levels)
 
+  heatmap_width <- if (is.null(cell_size_mm)) {
+    unit(1, "npc")
+  } else {
+    unit(ncol(hmap_mat) * cell_size_mm, "mm")
+  }
+  heatmap_height <- if (is.null(cell_size_mm)) {
+    unit(1, "npc")
+  } else {
+    unit(nrow(hmap_mat) * cell_size_mm, "mm")
+  }
+
   max_val <- max(round(abs(range(hmap_mat, na.rm = T))))
   col_range <- c(-max_val, 0, max_val)
   ##AA0827
@@ -896,6 +907,8 @@ show_row_dend = F, show_column_dend = F) {
     column_split = col_split,
     column_title=NULL,
     cluster_column_slices = FALSE,  # prevents reordering of splits
+    width = heatmap_width,
+    height = heatmap_height,
     row_title=NULL,
     
 
