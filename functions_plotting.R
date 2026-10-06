@@ -147,10 +147,11 @@ p_to_symbol <- function(p) {
   return(res)
 }
 
-f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NULL,clean_tax_names=TRUE,add_to_y_axis = 0.25){
+f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NULL,clean_tax_names=TRUE,add_to_y_axis = 0.25,label_mode = c("nominal_or_fdr", "nominal")){
   # Takes a dataframe with testing results and generates a volcano plot
 
   stopifnot(all(c("p.val_lm","effect.size","tax") %in% colnames(plot_df)))
+  label_mode <- match.arg(label_mode)
 
   leg_text_size <- 8
   yName <- "P-value"
@@ -210,7 +211,11 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
       enriched_in = factor(enriched_in, levels = c(g1, g2, "n.s.")),
       font = ifelse(fdr_sig, "bold.italic", "italic"), # for labeling
       group_prev = ifelse(effect.size > 0, Prev_Group2, Prev_Group1), # size based on prevalence in group
-      lab := case_when(!!as.symbol(pMethod) < 0.05 | p.val_adj < fdr_thresh ~ lab, TRUE ~ "")
+      lab := case_when(
+        !!as.symbol(pMethod) < 0.05 |
+          (label_mode == "nominal_or_fdr" & p.val_adj < fdr_thresh) ~ lab,
+        TRUE ~ ""
+      )
     )  
   # Step2: Do the actual plotting
   pt <- plot_df %>%
