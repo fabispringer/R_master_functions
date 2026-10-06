@@ -147,7 +147,7 @@ p_to_symbol <- function(p) {
   return(res)
 }
 
-f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NULL,clean_tax_names=TRUE,add_to_y_axis = 0.25,label_mode = c("nominal_or_fdr", "nominal"),label_max_overlaps = 10){
+f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NULL,clean_tax_names=TRUE,add_to_y_axis = 0.25,label_mode = c("nominal_or_fdr", "nominal")){
   # Takes a dataframe with testing results and generates a volcano plot
 
   stopifnot(all(c("p.val_lm","effect.size","tax") %in% colnames(plot_df)))
@@ -239,8 +239,7 @@ f_plot_volcano <- function(plot_df,xBreaks,xLims,fdr_thresh=0.2,man_y_breaks=NUL
       color = "black",
       segment.color = "black",
       size = 2,
-      seed = 420,
-      max.overlaps = label_max_overlaps
+      seed = 420
     )
 
   # Refine plot with legends and axis etc
