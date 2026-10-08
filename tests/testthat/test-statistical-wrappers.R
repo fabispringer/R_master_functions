@@ -21,6 +21,26 @@ test_that("linear model wrapper returns the expected x effect", {
   expect_equal(as.numeric(result["N_Group1"]) + as.numeric(result["N_Group2"]), 6)
 })
 
+test_that("HBV is the baseline and left-hand group for HBV versus HCV", {
+  sample_ids <- paste0("sample_", seq_len(6))
+  x <- setNames(rep(c("HBV_HCC", "HCV_HCC"), each = 3), sample_ids)
+  y <- setNames(c(1, 2, 3, 4, 5, 6), sample_ids)
+  meta <- data.frame(Sample_ID = sample_ids, row.names = sample_ids)
+
+  result <- f_lm(
+    x = x,
+    y = y,
+    formula = y ~ x,
+    meta = meta,
+    feat_name_x = "etiology",
+    feat_name_y = "feature"
+  )
+
+  expect_identical(unname(result["Group1"]), "HBV_HCC")
+  expect_identical(unname(result["Group2"]), "HCV_HCC")
+  expect_equal(as.numeric(result["effect_size"]), 3)
+})
+
 test_that("logistic model wrapper returns the expected odds ratio", {
   sample_ids <- paste0("sample_", seq_len(12))
   x <- setNames(rep(c("control", "case"), each = 6), sample_ids)
